@@ -1,0 +1,31 @@
+# ─────────────────────────────────────────────────────────────
+# .gitignore — estrategia "lista blanca": se ignora TODO y solo
+# se permite explícitamente lo que debe publicarse.
+# ─────────────────────────────────────────────────────────────
+
+# 1) Ignorar todo en la raíz (incluye archivos ocultos como .gemini_key)
+/*
+
+# 2) Permitir únicamente lo que SÍ se sube
+!/.gitignore
+!/README.md
+!/plan_titulacion.pdf
+!/plan_titulacion.docx
+!/referencias_bibliograficas/
+!/lineamientos/
+!/proyecto/
+
+# 3) Defensa extra: secretos y temporales nunca se suben aunque se incluyan carpetas
+.gemini_key
+*.env
+/graphify-out/
+
+# ─────────────────────────────────────────────────────────────
+# REPOSITORIO PÚBLICO — NO publicar documentos internos/confidenciales
+# de la empresa ni PDFs de editoriales con posibles restricciones de
+# copyright. Se conservan fuentes.md y referencias.bib.
+# ─────────────────────────────────────────────────────────────
+/proyecto/script_asesores.pdf
+/proyecto/palabras_alertas.pdf
+/proyecto/parametros_calidad_empresa.md
+/referencias_bibliograficas/**/*.pdf

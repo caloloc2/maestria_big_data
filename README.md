@@ -56,12 +56,6 @@ agentes.
 ```
 .
 ├── plan_titulacion.pdf / .docx     # Plan de titulación (documento principal, estilo IEEE)
-├── informacion.md                  # Notas e información general del trabajo
-├── secciones_plan_titulacion/      # Redacción por secciones + guías de citas/estilo
-│   ├── 01_revision_literatura.md … 06_metodologia.md
-│   ├── 00_guia_citas_ieee_mendeley.md
-│   ├── 00_guia_estilos_formato_word.md
-│   └── presentacion.md             #   Guion de diapositivas para la defensa
 ├── referencias_bibliograficas/     # Fuentes de la revisión de literatura
 │   ├── ejeA_analitica_tiempo_real/ #   PDFs por eje temático
 │   ├── ejeB_speech_asr/
@@ -70,9 +64,7 @@ agentes.
 │   ├── fuentes.md                  #   Tabla de seguimiento de fuentes
 │   └── referencias.bib             #   Bibliografía IEEE (importable a Mendeley)
 ├── lineamientos/                   # Guías y plantilla oficiales de UISRAEL (IEEE, requisitos)
-├── proyecto/                       # Insumos de la parte práctica (rúbricas y guías técnicas)
-├── clases/                         # Material de clases de la maestría
-└── graphify-out/                   # Grafo de conocimiento del repositorio (reporte, HTML, JSON)
+└── proyecto/                       # Insumos de la parte práctica (rúbricas y guías técnicas)
 ```
 
 ## 5. Estado del plan

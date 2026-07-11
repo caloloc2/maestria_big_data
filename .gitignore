@@ -14,7 +14,7 @@
 !/referencias_bibliograficas/
 !/lineamientos/
 !/proyecto/
-
+!/defensa.pptx
 # 3) Defensa extra: secretos y temporales nunca se suben aunque se incluyan carpetas
 .gemini_key
 *.env

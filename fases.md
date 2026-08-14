@@ -11,9 +11,9 @@
 
 ---
 
-## Resumen visual (vista rápida)
+## Resumen
 
-Antes del detalle, dejo tres diagramas para entender de un vistazo **la infraestructura**,
+Tres diagramas para entender de un vistazo **la infraestructura**,
 **las fases** y **las tecnologías/pipeline**.
 
 ### A) Infraestructura (on-premise + Gemini)
@@ -221,8 +221,13 @@ Leyenda: ⬜ No iniciada · 🟨 En progreso · ✅ Completada
 ## Componente transversal T — Gobernanza y Calidad de Datos
 
 **Objetivo:** garantizar **calidad, trazabilidad, reproducibilidad y privacidad** del dato
-a lo largo de todo el pipeline (responde directamente a la observación del tutor sobre
-«gobernanza y calidad de datos»). No es una fase secuencial: **atraviesa las Fases 1–9**.
+a lo largo de todo el pipeline. No es una fase secuencial: **atraviesa las Fases 1–9**.
+Las decisiones fundacionales están fijadas en la **carta de gobernanza**
+([gobernanza.md](gobernanza.md)).
+
+> **Ojo — dos «calidades» distintas:** *calidad de la VENTA* (negocio) = rúbrica
+> [proyecto/parametros_calidad_empresa.md](proyecto/parametros_calidad_empresa.md);
+> *calidad del DATO* (técnica) = este componente. La gobernanza además **versiona** la rúbrica.
 
 **Justificación metodológica:** DSR → *Rigor* (confiabilidad y reproducibilidad del
 artefacto). CRISP-DM → transversal a *Comprensión/Preparación/Modelado/Evaluación*.
@@ -260,6 +265,7 @@ linaje + versionado), integrada en el pipeline.
 **Justificación metodológica:** DSR → establece el *entorno* (rigor) donde vivirá el artefacto. CRISP-DM → *Comprensión del negocio* (preparar herramientas y alcance).
 
 **Hitos / pasos:**
+- [ ] Redactar la **carta de gobernanza** ([gobernanza.md](gobernanza.md)) con las decisiones fundacionales (claves `uniqueid`/`linkedid`, contratos, calidad, versionado, privacidad/retención, umbral de cruce). *(Ya definida.)*
 - [ ] Liberar RAM en el host: **eliminar** `Ubuntu_Temporal` (+~1.5 GB, +10 GB disco) y **apagar** `ProperTime` (+~1.5 GB).
 - [ ] Reconfigurar `Ubuntu_Dockers`: **8 vCPU**, **8–10 GB RAM** (con *reservation* de memoria para evitar swapping), disco suficiente.
 - [ ] Instalar Docker Engine + Docker Compose v2 en la VM.
@@ -517,3 +523,4 @@ linaje + versionado), integrada en el pipeline.
 
 - _2026-08-14 · Fase 0 (previo) · Definición de fases, hardware y estrategia. Transcripción del plan y `fases.md` creados. Siguiente: ejecutar Fase 0 (dimensionar VM + scaffold + docker-compose)._
 - _2026-08-14 · Ajuste por observación del tutor · Agregada la justificación Big Data por las «V», el Componente transversal T (Gobernanza y Calidad), criterios de escalabilidad (Fase 2) y la definición formal de los modelos (Familias A y B, Fases 4 y 6). Ver [observaciones.md](observaciones.md). Pendiente: nuevo documento del plan con el reencuadre y decisión del nuevo título._
+- _2026-08-14 · Gobernanza definida · Creada la carta [gobernanza.md](gobernanza.md) (claves `uniqueid`/`linkedid`, retención por sensibilidad LOPDP, acceso solo autor, pandera inline, versionado carpeta/fecha, umbral cruce ≥ 95 % + precisión linkage). Añadidas 2 referencias al `.bib` (batini2009, christen2012). Enlazada como entregable de Fase 0._

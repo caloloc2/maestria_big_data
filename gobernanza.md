@@ -4,7 +4,6 @@
 > rigen todo el pipeline (claves, contratos, calidad, versionado, privacidad y
 > reproducibilidad). Es el **primer entregable de la Fase 0** y la referencia del
 > **Componente transversal T** de [fases.md](fases.md).
-> Lo escribo en primera persona porque son mis decisiones de diseño.
 > Relacionados: [pipeline.md](pipeline.md), [tecnologias.md](tecnologias.md),
 > [observaciones.md](observaciones.md).
 

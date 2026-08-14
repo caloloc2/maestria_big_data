@@ -32,7 +32,7 @@
 
 ---
 
-## 2. Mi veredicto
+## 2. Estado actual
 
 Después de contrastar la observación con todo lo que ya definí en mis documentos de
 implementación, mi conclusión es clara:
@@ -59,13 +59,13 @@ dimensiones, y en mi caso las fuertes son otras:
 
 | Dimensión | Cómo la argumento en mi proyecto |
 |---|---|
-| **Variety** (la más fuerte) | Combino datos **no estructurados** (voz), **estructurados** (CDR) y **texto** derivado; es un problema **multimodal** [ref. 12]. |
-| **Velocity** | Proceso un **flujo continuo** de eventos (cada llamada al colgar) en modo **near-real-time** por streaming. |
-| **Veracity** | Debo manejar **alucinaciones** del ASR [ref. 6], **calidad y trazabilidad** de datos y **anonimización**; esto exige gobernanza. |
-| **Value** | Genero KPIs de negocio y reduzco **riesgo regulatorio** (multas de la Superintendencia). |
-| **Volume** | No es un dataset estático de 100 GB: es un **stream de producción que crece de forma indefinida**, con **datos derivados** (transcripciones, features) y un **alto costo computacional de ASR** (procesar cada segundo de audio es *compute-bound*, no solo almacenamiento). |
+| **Variedad** (la más fuerte) | Combino datos **no estructurados** (voz), **estructurados** (CDR) y **texto** derivado; es un problema **multimodal** [ref. 12]. |
+| **Velocidad** | Proceso un **flujo continuo** de eventos (cada llamada al colgar) en modo **near-real-time** por streaming. |
+| **Veracidad** | Debo manejar **alucinaciones** del ASR [ref. 6], **calidad y trazabilidad** de datos y **anonimización**; esto exige gobernanza. |
+| **Valor** | Genero KPIs de negocio y reduzco **riesgo regulatorio** (multas de la Superintendencia). |
+| **Volumen** | No es un dataset estático de 100 GB: es un **stream de producción que crece de forma indefinida**, con **datos derivados** (transcripciones, features) y un **alto costo computacional de ASR** (procesar cada segundo de audio es *compute-bound*, no solo almacenamiento). |
 
-**Mi argumento central para el tribunal:** una sola máquina *podría* procesar los 100 GB
+Una sola máquina *podría* procesar los 100 GB
 de una vez, pero **no garantiza** ingesta continua sin pérdida, tolerancia a fallos,
 reprocesamiento ni **escalabilidad horizontal** en un sistema que va a operar **en
 producción de forma permanente**. Ese es el criterio de arquitectura, no el tamaño
@@ -115,7 +115,7 @@ una etapa más del pipeline gobernado.
 
 ## 6. Los dos vacíos reales que debo cerrar
 
-### 6.1. Gobernanza y calidad de datos (nuevo — el tutor lo pidió explícito)
+### 6.1. Gobernanza y calidad de datos
 Añado una capa **transversal** con:
 - **Calidad:** validaciones automáticas en cada frontera de zona (**Great Expectations /
   pandera / Soda**): esquemas, rangos, nulos, unicidad de `call_id`, cobertura del cruce

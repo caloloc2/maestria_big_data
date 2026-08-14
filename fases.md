@@ -11,6 +11,119 @@
 
 ---
 
+## Resumen visual (vista rápida)
+
+Antes del detalle, dejo tres diagramas para entender de un vistazo **la infraestructura**,
+**las fases** y **las tecnologías/pipeline**.
+
+### A) Infraestructura (on-premise + Gemini)
+
+Todo lo sensible corre en mi LAN; solo el **texto ya anonimizado** sale a la nube.
+
+```mermaid
+flowchart TB
+    subgraph LAN["Red local on-premise"]
+        subgraph AST["Servidor Asterisk - CentOS 7.5"]
+            A1["MySQL CDR<br/>solo lectura"]
+            A2["Grabaciones<br/>/home/grabacion"]
+        end
+        subgraph HOST["Host ESXi - HP DL160 Gen9 (16 cores / 31.75 GB)"]
+            subgraph VM["VM Ubuntu_Dockers (8 vCPU / 8-10 GB, sin GPU)"]
+                K["Kafka<br/>ingesta streaming"]
+                SP["Spark / PySpark<br/>batch"]
+                W["faster-whisper<br/>+ diarizacion"]
+                AN["Anonimizacion<br/>Presidio + spaCy"]
+                PG[("PostgreSQL<br/>capa servida")]
+                DASH["Streamlit<br/>tablero"]
+            end
+        end
+    end
+    GEM["Gemini API<br/>solo texto anonimizado"]
+    A1 --> K
+    A2 --> W
+    K --> SP
+    W --> AN
+    AN --> GEM
+    GEM --> PG
+    SP --> PG
+    PG --> DASH
+```
+
+### B) Fases de implementación (batch primero, luego streaming)
+
+Orden secuencial 0 → 9, con el **Componente transversal T** (Gobernanza y Calidad)
+atravesando todas las fases.
+
+```mermaid
+flowchart LR
+    F0["0. Fundaciones"] --> F1["1. Diagnostico datos"]
+    F1 --> F2["2. Batch Spark"]
+    F2 --> F3["3. ASR + Anonimizacion"]
+    F3 --> F4["4. Analisis Gemini"]
+    F4 --> F5["5. Streaming Kafka"]
+    F5 --> F6["6. Anomalias"]
+    F6 --> F7["7. Tablero"]
+    F7 --> F8["8. Evaluacion"]
+    F8 --> F9["9. Despliegue"]
+    T["T. Gobernanza y Calidad - transversal a todas las fases"] -.-> F1
+    T -.-> F4
+    T -.-> F8
+```
+
+| CRISP-DM | Fases |
+|---|---|
+| Comprensión del negocio / de los datos | 0, 1 |
+| Preparación de datos | 2, 3 |
+| Modelado | 4, 6 |
+| Despliegue | 5, 7, 9 |
+| Evaluación | 8 |
+| Gobernanza y calidad (transversal) | T |
+
+### C) Tecnologías y pipeline Medallion (Bronce → Plata → Oro)
+
+Cada zona sube la calidad del dato; la **anonimización** es la frontera antes de Gemini.
+
+```mermaid
+flowchart LR
+    subgraph SRC["Fuentes"]
+        CDR["MySQL CDR"]
+        AUD["Grabaciones mp3/wav"]
+    end
+    subgraph BRONCE["Bronce - crudo"]
+        B["CDR crudo + audio<br/>+ transcripcion cruda (PII)"]
+    end
+    subgraph PLATA["Plata - limpio + anonimizado"]
+        S["Llamada normalizada<br/>+ transcripcion anonimizada"]
+    end
+    subgraph ORO["Oro - negocio"]
+        G["Evaluaciones + KPIs<br/>+ anomalias"]
+    end
+    CDR -->|"Kafka / Spark"| B
+    AUD -->|"ffmpeg + faster-whisper + pyannote"| B
+    B -->|"Presidio + spaCy (anonimiza)"| S
+    S -->|"Gemini + scikit-learn"| G
+    G -->|"PostgreSQL"| DASH["Streamlit (tablero)"]
+```
+
+| Etapa | Tecnología | Zona |
+|---|---|---|
+| Ingesta streaming | Apache Kafka | 🥉 |
+| Procesamiento batch | Apache Spark / PySpark | 🥉🥈 |
+| Normalización audio | ffmpeg | 🥉 |
+| Transcripción + diarización | faster-whisper + WhisperX/pyannote | 🥉 |
+| Anonimización (frontera PII) | Presidio + spaCy | 🥉→🥈 |
+| Análisis semántico | Gemini API (texto anonimizado) | 🥈→🥇 |
+| Anomalías | scikit-learn (IsolationForest) | 🥇 |
+| Capa servida | PostgreSQL | 🥇 |
+| Tablero | Streamlit | — |
+| Gobernanza y calidad | Great Expectations/pandera, pydantic, versionado | todas |
+
+> Detalle ampliado de cada pieza en [tecnologias.md](tecnologias.md), del flujo paso a
+> paso en [pipeline.md](pipeline.md) y de la infraestructura/costos en
+> [infraestructura.md](infraestructura.md).
+
+---
+
 ## Marco metodológico (referencia rápida)
 
 - **Design Science Research (DSR)** [Hevner, 2004]: ciclo *Relevancia → Diseño/Construcción → Evaluación → Rigor → Comunicación*. Cada fase declara a qué momento del DSR pertenece (construir un **artefacto** que resuelve un problema real y evaluarlo).
@@ -269,7 +382,8 @@ linaje + versionado), integrada en el pipeline.
 - *Salida:* vector de criterios A/B/C, `calidad_score`, `venta_valida` (regla dura), `riesgo_reclamo`, sentimiento.
 - *Métricas:* **Accuracy, Precision, Recall, F1** contra el *gold set*.
 
-**Hitos / pasos:** (`proyecto/parametros_calidad_empresa.md`): Grupo A (script), B (palabras prohibidas), C (omisiones), severidades CRÍTICA/MAYOR/MENOR.
+**Hitos / pasos:**
+- [ ] Implementar `rubrica_v1` (`proyecto/parametros_calidad_empresa.md`): Grupo A (script), B (palabras prohibidas), C (omisiones), severidades CRÍTICA/MAYOR/MENOR.
 - [ ] Prompt(s) a **Gemini** con salida **JSON estructurada** (esquema de `guia_etiquetado_calidad.md`): criterios, `calidad_score`, `venta_valida` (regla dura), `riesgo_reclamo`, sentimiento del asesor y trayectoria del cliente.
 - [ ] Detección híbrida: `fuzzy-match` local para descargos legales exactos (A07/C05) + juicio de Gemini para el resto.
 - [ ] **Weak supervision / gold set**: muestreo estratificado + revisión de un auditor (`humano_confirmada`/`humano_corregida`); versionado de rúbrica.
@@ -317,7 +431,8 @@ linaje + versionado), integrada en el pipeline.
 - *Técnicas:* **Isolation Forest**, **autoencoders** [ref. 15] y **z-score** (no supervisado); **series temporales** [ref. 16] para el pronóstico de KPIs.
 - *Validación:* confirmación humana de casos marcados + `precision@k`; comparación con el histórico del propio agente y del grupo.
 
-**Hitos / pasos:** (día/semana): contactabilidad, conversión, calidad media, `pct_ventas_validas`, duración media, sentimiento negativo.
+**Hitos / pasos:**
+- [ ] Agregados por agente y ventana (día/semana): contactabilidad, conversión, calidad media, `pct_ventas_validas`, duración media, sentimiento negativo.
 - [ ] Detección de anomalías **no supervisada**: `IsolationForest` / z-score (scikit-learn) sobre histórico del agente y del grupo.
 - [ ] Predicción de KPIs (series temporales) para horarios/días de mayor efectividad.
 - [ ] Confirmación humana de anomalías marcadas (bucle de retroalimentación).

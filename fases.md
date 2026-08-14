@@ -189,7 +189,7 @@ garantiza** ingesta continua sin pérdida, tolerancia a fallos, reprocesamiento 
 
 ---
 
-## Infraestructura objetivo (confirmada)
+## Infraestructura
 
 - **Host ESXi:** HP ProLiant DL160 Gen9 — 16 cores Xeon E5-2609 v4, 31.75 GB RAM, datastore 1.81 TB (709 GB libres). **CPU ~5 % usado (ocioso); RAM ~89 % usada (recurso crítico).**
 - **VM de trabajo `Ubuntu_Dockers`:** objetivo **8 vCPU + 8–10 GB RAM** (tras liberar `Ubuntu_Temporal` y apagar `ProperTime`). **Sin GPU** (no hay presupuesto ni slot práctico en un 1U) → **inferencia CPU-only sobre una muestra representativa**.

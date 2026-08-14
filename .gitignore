@@ -5,6 +5,7 @@
 
 # 1) Ignorar todo en la raíz (incluye archivos ocultos como .gemini_key)
 /*
+!/*.md
 
 # 2) Permitir únicamente lo que SÍ se sube
 !/.gitignore

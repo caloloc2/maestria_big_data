@@ -1,12 +1,12 @@
 # Tecnologías del proyecto — Referencia técnica
 
-> Documento de consulta permanente. Para cada tecnología: **qué es**, **cómo
-> funciona**, **cómo la usamos en este proyecto** y su **equivalente en AWS**.
-> Complementa [pipeline.md](pipeline.md), [fases.md](fases.md) e
+> Documento de consulta permanente. Para cada tecnología explico: **qué es**, **cómo
+> funciona**, **cómo la uso en este proyecto** y su **equivalente en AWS**.
+> Lo complemento con [pipeline.md](pipeline.md), [fases.md](fases.md) e
 > [infraestructura.md](infraestructura.md).
 
-**¿Funciona igual on-premise que en AWS?** Sí. El **diseño es agnóstico**: los módulos
-van en contenedores y la lógica no cambia; solo se sustituye la pieza de
+**¿Funciona igual on-premise que en AWS?** Sí. Mi **diseño es agnóstico**: pongo los
+módulos en contenedores y la lógica no cambia; solo sustituyo la pieza de
 infraestructura por su equivalente gestionado en la nube (ver tabla al final).
 
 ---
@@ -80,8 +80,8 @@ infraestructura por su equivalente gestionado en la nube (ver tabla al final).
   **int8** → más rápido y con menos RAM en CPU.
 - **Cómo funciona:** recibe el audio normalizado y devuelve texto con marcas de tiempo.
   Modelo `small`/`medium` según RAM disponible; `language="es"`.
-- **En el proyecto:** transcribe **on-premise** (el audio crudo nunca sale). Para el
-  histórico completo se puede acelerar con **GPU en AWS** puntualmente.
+- **En el proyecto:** lo uso para transcribir **on-premise** (el audio crudo nunca sale). Para el
+  histórico completo puedo acelerarlo con **GPU en AWS** puntualmente.
 - **AWS:** Whisper en **EC2 GPU** (`g4dn`), o **Amazon Transcribe** (gestionado; pero
   envía audio crudo a AWS).
 
@@ -108,7 +108,7 @@ infraestructura por su equivalente gestionado en la nube (ver tabla al final).
   **Bedrock** (varios modelos en AWS).
 - **Cómo funciona:** se les pasa el **texto anonimizado + la rúbrica** y devuelven **JSON
   estructurado** (criterios A/B/C, `calidad_score`, `venta_valida`, sentimiento).
-- **En el proyecto:** hace el **análisis semántico pesado** sin consumir tu hardware ni ver
+- **En el proyecto:** lo uso para el **análisis semántico pesado** sin consumir mi hardware ni ver
   datos personales.
 - **AWS:** **Bedrock** mantiene el análisis dentro de la nube de AWS.
 
@@ -172,6 +172,6 @@ infraestructura por su equivalente gestionado en la nube (ver tabla al final).
 | Tablero | Streamlit | QuickSight |
 | Orquestación / horario | Prefect / cron | Step Functions / EventBridge |
 
-**Conclusión:** el proyecto se construye una sola vez y puede **desplegarse on-premise
-(recomendado por costo/privacidad/latencia) o en AWS** cambiando únicamente la capa de
-infraestructura, no la lógica ni los pipelines.
+**Conclusión:** construyo el proyecto una sola vez y puedo **desplegarlo on-premise
+(mi opción recomendada por costo/privacidad/latencia) o en AWS** cambiando únicamente la
+capa de infraestructura, no la lógica ni los pipelines.

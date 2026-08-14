@@ -4,10 +4,10 @@
 > grabaciones y CDR de call center (MKV / Diners Club).
 > **Autor:** Carlos Enrique Miño Flores · Maestría en Big Data y Data Science (UISRAEL) · 2026.
 >
-> Este documento es el **tracker maestro** de la implementación. Se actualiza al
+> Este documento es mi **tracker maestro** de la implementación. Lo actualizo al
 > avanzar/cerrar cada fase para saber, en cualquier reanudación, exactamente **dónde
-> estamos y qué falta**. Cada fase está **justificada con la metodología** (DSR +
-> CRISP-DM) y ligada a los **objetivos específicos** del plan de titulación.
+> estoy y qué falta**. Cada fase la justifico con la metodología (DSR +
+> CRISP-DM) y la ligo a los **objetivos específicos** del plan de titulación.
 
 ---
 
@@ -29,7 +29,7 @@
 
 ### Arquitectura de datos: Medallion (transversal a las fases)
 
-El dato se organiza en tres zonas de calidad creciente (detalle en
+El dato lo organizo en tres zonas de calidad creciente (detalle en
 [pipeline.md](pipeline.md)). **No cambia el orden de las fases**; define *dónde vive*
 el dato en cada una:
 

@@ -1,7 +1,7 @@
 # Infraestructura — Estado actual, brechas y comparativa On-Premise vs. AWS
 
-> Documento de decisión de infraestructura para el proyecto de titulación.
-> Complementa [fases.md](fases.md) y [plan_titulacion.md](plan_titulacion.md).
+> Documento de decisión de infraestructura para mi proyecto de titulación.
+> Lo complemento con [fases.md](fases.md) y [plan_titulacion.md](plan_titulacion.md).
 > **Fecha de análisis:** agosto 2026. **Los precios de AWS son aproximados** (precios
 > de lista *on-demand*, región `us-east-1`) y deben validarse en el
 > [AWS Pricing Calculator](https://calculator.aws) antes de contratar.
@@ -72,7 +72,7 @@ Con esto el stack corre en modo **CPU-only sobre una muestra representativa**, d
 
 ## 4. Opción alternativa: todo en AWS
 
-Analizo la opción **100 % nube** que planteaste. La latencia LAN→AWS **no es un problema** porque el análisis es *near-real-time* (la llamada ya terminó; un retraso de segundos/minutos no afecta).
+Analizo la opción **100 % nube** que planteé. La latencia LAN→AWS **no es un problema** porque el análisis es *near-real-time* (la llamada ya terminó; un retraso de segundos/minutos no afecta).
 
 ### 4.1. Arquitectura de referencia en AWS
 
@@ -112,7 +112,7 @@ El call center opera **L–V 9:00–20:00** y **Sábado 9:00–13:00** (domingo 
 
 ### 4.3. Consideración de privacidad (importante)
 
-En on-premise el audio crudo **nunca sale de la LAN**. En AWS, el audio crudo (con PII) **residiría en S3** para poder transcribirlo (no se puede anonimizar el audio antes del ASR). Esto es aceptable **si** se aplica: cifrado en reposo (**KMS**) y en tránsito (**TLS**), **VPC** privada, buckets sin acceso público, e IAM mínimo. Aun así, es un **cambio de postura de riesgo** frente a on-premise. Por eso on-premise sigue siendo preferible para el dato crudo.
+En on-premise el audio crudo **nunca sale de la LAN**. En AWS, el audio crudo (con PII) **residiría en S3** para poder transcribirlo (no puedo anonimizar el audio antes del ASR). Lo considero aceptable **si** aplico: cifrado en reposo (**KMS**) y en tránsito (**TLS**), **VPC** privada, buckets sin acceso público, e IAM mínimo. Aun así, es un **cambio de postura de riesgo** frente a on-premise. Por eso sigo prefiriendo on-premise para el dato crudo.
 
 ---
 
@@ -159,7 +159,7 @@ En on-premise el audio crudo **nunca sale de la LAN**. En AWS, el audio crudo (c
 ## 6. Recomendación
 
 - **Producción steady-state → On-Premise.** Es más barato, más privado y ya tienes el servidor. Con liberar RAM (+ upgrade opcional) alcanza.
-- **AWS como "burst" opcional para la carga histórica única.** El reproceso inicial de los **100 GB / 100k CDR** es intensivo y puntual: se puede levantar una **EC2 GPU por unos días**, procesar el histórico y apagarla — pagando solo esas horas. Lo mejor de ambos mundos.
+- **AWS como "burst" opcional para la carga histórica única.** El reproceso inicial de los **100 GB / 100k CDR** es intensivo y puntual: puedo levantar una **EC2 GPU por unos días**, procesar el histórico y apagarla — pagando solo esas horas. Lo mejor de ambos mundos.
 - **AWS full-cloud** queda **documentado como alternativa** (escalabilidad futura / si la empresa migrara a nube), con la arquitectura y costos de este documento. Defendible ante el tribunal como decisión **justificada por costo, privacidad y latencia**.
 
-> El diseño del software (contenedores + Medallion + pipelines) se hace **agnóstico**: los mismos módulos corren on-premise o en AWS cambiando solo la capa de infraestructura (ver [tecnologias.md](tecnologias.md), tabla de equivalencias).
+> Hago el diseño del software (contenedores + Medallion + pipelines) **agnóstico**: los mismos módulos corren on-premise o en AWS cambiando solo la capa de infraestructura (ver [tecnologias.md](tecnologias.md), tabla de equivalencias).

@@ -1,10 +1,10 @@
 # Pipeline de datos — Batch y Streaming con arquitectura Medallion
 
-> Explica **paso a paso** cómo fluye el dato en los dos caminos de la arquitectura
+> Explico **paso a paso** cómo fluye el dato en los dos caminos de la arquitectura
 > híbrida (Lambda/Kappa): el **streaming** (llamada nueva, *near-real-time*) y el
 > **batch** (reproceso del histórico por rango de fechas). Ambos escriben en las
 > mismas **zonas Medallion** (Bronce → Plata → Oro).
-> Complementa [tecnologias.md](tecnologias.md), [fases.md](fases.md) e
+> Lo complemento con [tecnologias.md](tecnologias.md), [fases.md](fases.md) e
 > [infraestructura.md](infraestructura.md).
 
 ---
@@ -12,8 +12,8 @@
 ## 0. Arquitectura Medallion (Bronce / Plata / Oro)
 
 Medallion es un patrón para organizar el *data lake* en **tres zonas de calidad
-creciente**. Cada zona es una carpeta/prefijo (Parquet en disco / **MinIO** on-prem
-o **S3** en AWS) y/o tablas.
+creciente**. En mi caso, cada zona es una carpeta/prefijo (Parquet en disco / **MinIO**
+on-prem o **S3** en AWS) y/o tablas.
 
 | Zona | Qué contiene | Estado del dato | Ejemplo en este proyecto |
 |---|---|---|---|
@@ -56,82 +56,82 @@ en el tablero**, sin intervención manual. Cada paso indica la **tecnología** y
 ### Paso 0 — El asesor cuelga (Asterisk)
 - Asterisk detecta el `hangup`, **escribe la fila en `cdr` (MySQL)** y guarda la
   **grabación** (`.wav`, luego `.mp3`).
-- *Tecnología:* **Asterisk + MySQL** (producción, ya existe). Nosotros **solo leemos**.
+- *Tecnología:* **Asterisk + MySQL** (producción, ya existe). Yo **solo leo**.
 
 ### Paso 1 — Detección e ingesta del evento
-- Un **servicio de ingesta** (Python, siempre encendido) hace **polling incremental**
-  del CDR: `SELECT ... WHERE calldate > :ultima_marca ORDER BY calldate`.
-  Guarda una **marca de agua** (`uniqueid`/`calldate`) para no repetir.
-- Por cada llamada nueva construye un **evento** con `call_id`, `src` (agente),
-  `dst`, `duration`, `billsec`, `disposition` y **resuelve la ruta de la grabación**
-  (usa `urlrecord` si existe; si no, reconstruye por `calldate`+`src` contra el
+- Levanto un **servicio de ingesta** (Python, siempre encendido) que hace **polling
+  incremental** del CDR: `SELECT ... WHERE calldate > :ultima_marca ORDER BY calldate`.
+  Guardo una **marca de agua** (`uniqueid`/`calldate`) para no repetir.
+- Por cada llamada nueva construyo un **evento** con `call_id`, `src` (agente),
+  `dst`, `duration`, `billsec`, `disposition` y **resuelvo la ruta de la grabación**
+  (uso `urlrecord` si existe; si no, la reconstruyo por `calldate`+`src` contra el
   índice de archivos — ver [fases.md](fases.md), Fase 1).
-- **Publica el evento** en el *topic* **Kafka** `llamadas.finalizadas`.
+- **Publico el evento** en el *topic* **Kafka** `llamadas.finalizadas`.
   *(En AWS este evento va a **Amazon SQS**.)*
 - *Tecnología:* **Python + conector MySQL + Apache Kafka** (o SQS).
-- 🥉 **Bronce:** se deposita el **CDR crudo** (JSON) y se registra el **audio original**.
+- 🥉 **Bronce:** deposito el **CDR crudo** (JSON) y registro el **audio original**.
 
 > **¿Y si el servidor de procesamiento está apagado (horario)?** El evento **queda en
 > la cola** (Kafka/SQS) o simplemente en MySQL con la marca de agua. Al reencender, se
 > procesa el backlog. Fuera de horario las llamadas son nulas/mínimas.
 
 ### Paso 2 — Normalización del audio
-- El **consumidor ASR** lee el evento, localiza el `.mp3`/`.wav` y lo **convierte a
+- Mi **consumidor ASR** lee el evento, localiza el `.mp3`/`.wav` y lo **convierte a
   formato estándar** para reconocimiento: **mono, 16 kHz, PCM**.
 - *Tecnología:* **ffmpeg**.
-- 🥉 **Bronce:** el audio normalizado se conserva junto al original.
+- 🥉 **Bronce:** conservo el audio normalizado junto al original.
 
 ### Paso 3 — Transcripción + diarización (ASR)
-- Se ejecuta **faster-whisper** (`language="es"`) → texto con marcas de tiempo.
+- Ejecuto **faster-whisper** (`language="es"`) → texto con marcas de tiempo.
 - **Diarización** (quién habla: **asesor** vs **cliente**, mismo canal) con
   **WhisperX/pyannote** → turnos etiquetados.
-- **Verificación anti-alucinación:** se descartan/marcan segmentos de baja
+- **Verificación anti-alucinación:** descarto/marco segmentos de baja
   probabilidad, silencios largos o repeticiones sospechosas [ref. Careless Whisper].
-- Publica en *topic* `transcripciones`.
+- Publico en *topic* `transcripciones`.
 - *Tecnología:* **faster-whisper + WhisperX/pyannote**.
 - 🥉 **Bronce:** transcripción **cruda** (aún contiene PII).
 
 ### Paso 4 — Limpieza y ANONIMIZACIÓN  *(frontera de privacidad)*
-- El **consumidor de anonimización** aplica:
+- En mi **consumidor de anonimización** aplico:
   - **Regex** para cédula ecuatoriana, tarjetas, teléfonos, montos, correos.
   - **NER** con **spaCy español** (nombres, personas) vía **Microsoft Presidio**.
   - Limpieza/normalización del texto (muletillas, formato de turnos).
 - Salida: **transcripción diarizada anonimizada** (`<CEDULA>`, `<TARJETA>`, `<NOMBRE>`…).
-- Publica en *topic* `anonimizadas`.
+- Publico en *topic* `anonimizadas`.
 - *Tecnología:* **Presidio + spaCy ES + regex**.
 - 🥈 **Plata:** transcripción **limpia y anonimizada** + llamada normalizada
   (CDR↔grabación↔transcripción unificados, 1 fila por llamada).
 - ✅ **A partir de aquí el texto puede salir a la nube** (ya no hay PII).
 
 ### Paso 5 — Análisis semántico (rúbrica + sentimiento)
-- El **consumidor de análisis** envía el **texto anonimizado + la rúbrica**
+- Mi **consumidor de análisis** envía el **texto anonimizado + la rúbrica**
   (`rubrica_v1`) a **Gemini** (o **Bedrock**) y pide **JSON estructurado**:
   criterios A/B/C, `calidad_score`, `venta_valida` (regla dura), `riesgo_reclamo`,
   `sentimiento_asesor`, `sentimiento_cliente_trayectoria`.
-- Los **descargos legales exactos** (A07/C05) se verifican además con **fuzzy-match**
+- Los **descargos legales exactos** (A07/C05) los verifico además con **fuzzy-match**
   local (no dependen solo del LLM).
-- Validación del JSON con **pydantic**.
-- Publica en *topic* `analisis.calidad`.
+- Valido el JSON con **pydantic**.
+- Publico en *topic* `analisis.calidad`.
 - *Tecnología:* **Gemini/Bedrock API + pydantic + rapidfuzz**.
 - 🥇 **Oro:** registro de **evaluación** por llamada.
 
 ### Paso 6 — Persistencia en la capa servida
-- La evaluación + métricas del CDR se **escriben en PostgreSQL** (tablas Oro:
+- Escribo la evaluación + métricas del CDR en **PostgreSQL** (tablas Oro:
   `llamadas`, `evaluaciones`).
-- Se actualizan agregados (KPIs) por agente/periodo.
+- Actualizo los agregados (KPIs) por agente/periodo.
 - *Tecnología:* **PostgreSQL** (o RDS en AWS).
 - 🥇 **Oro**.
 
 ### Paso 7 — Visualización y alertas
-- El **tablero** lee Oro y muestra la llamada casi en tiempo real. Si
-  `infraccion_critica = true`, dispara **alerta** para auditoría.
+- Mi **tablero** lee Oro y muestra la llamada casi en tiempo real. Si
+  `infraccion_critica = true`, disparo una **alerta** para auditoría.
 - *Tecnología:* **Streamlit** (o QuickSight en AWS).
 
 ### Garantías del camino streaming
-- **Idempotencia:** `call_id` como clave → no se reprocesa dos veces.
+- **Idempotencia:** uso `call_id` como clave → no reproceso dos veces.
 - **Tolerancia a fallos:** si un consumidor cae, retoma desde su *offset* (Kafka) sin
   perder eventos.
-- **Latencia extremo-a-extremo:** se mide por llamada (métrica operativa de la tesis).
+- **Latencia extremo-a-extremo:** la mido por llamada (métrica operativa de la tesis).
 
 ```mermaid
 sequenceDiagram
@@ -159,16 +159,16 @@ sequenceDiagram
 
 ## 2. Pipeline BATCH (reproceso del histórico por fechas)
 
-**Objetivo:** reprocesar el histórico (2017→hoy) por **rango de fechas** con la
+**Objetivo:** reproceso el histórico (2017→hoy) por **rango de fechas** con la
 **misma lógica** que el streaming, para métricas comparables y para el *backfill*
 inicial.
 
 ### Paso 1 — Disparo parametrizado
-- Se lanza un **job Spark** con parámetros `--desde 2026-03-01 --hasta 2026-03-31`.
+- Lanzo un **job Spark** con parámetros `--desde 2026-03-01 --hasta 2026-03-31`.
 - *Tecnología:* **Apache Spark / PySpark** (manual, `cron`, o **Prefect**).
 
 ### Paso 2 — Lectura masiva (CDR + índice de audio)
-- Spark lee el **CDR por rango** vía **JDBC** y el **índice del filesystem** de
+- Con Spark leo el **CDR por rango** vía **JDBC** y el **índice del filesystem** de
   grabaciones (walk recursivo de `.mp3`/`.wav`, incluyendo archivos "regados").
 - *Tecnología:* **PySpark + JDBC MySQL**.
 - 🥉 **Bronce:** CDR crudo + inventario de audio, **particionado por fecha** (Parquet).
@@ -184,22 +184,22 @@ inicial.
 ### Paso 4 — ASR + anonimización (en paralelo por particiones)
 - Sobre la **muestra** seleccionada, cada *worker* de Spark ejecuta
   **faster-whisper + diarización** y luego **Presidio/spaCy** para anonimizar.
-- *(Para la tesis se procesa una **muestra representativa**, no los 100 GB completos
-  en CPU; el histórico total se puede hacer como **burst en AWS GPU** — ver
+- *(Para la tesis proceso una **muestra representativa**, no los 100 GB completos
+  en CPU; el histórico total lo puedo hacer como **burst en AWS GPU** — ver
   [infraestructura.md](infraestructura.md).)*
 - 🥈 **Plata:** transcripciones diarizadas **anonimizadas**, particionadas por fecha.
 
 ### Paso 5 — Análisis y agregación
-- Se aplica la **rúbrica con Gemini** sobre el texto anonimizado (en lotes,
+- Aplico la **rúbrica con Gemini** sobre el texto anonimizado (en lotes,
   respetando límites de la API) → **evaluaciones**.
-- Se calculan **KPIs por agente y periodo** (contactabilidad, conversión, calidad,
-  duración) y se corre la **detección de anomalías** (IsolationForest).
+- Calculo los **KPIs por agente y periodo** (contactabilidad, conversión, calidad,
+  duración) y corro la **detección de anomalías** (IsolationForest).
 - *Tecnología:* **Gemini + pandas/PySpark + scikit-learn**.
 - 🥇 **Oro:** evaluaciones + KPIs + anomalías.
 
 ### Paso 6 — Carga en la capa servida
-- El **Oro** se carga en **PostgreSQL** con el **mismo esquema** que el streaming.
-- Se mide el **speedup** (tiempo vs. núcleos/particiones) como evidencia de
+- Cargo el **Oro** en **PostgreSQL** con el **mismo esquema** que el streaming.
+- Mido el **speedup** (tiempo vs. núcleos/particiones) como evidencia de
   escalabilidad para el tribunal.
 - 🥇 **Oro** → tablero.
 

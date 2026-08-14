@@ -42,6 +42,38 @@ el dato en cada una:
 > La **anonimización** ocurre en el paso Bronce→Plata: solo Plata/Oro salen a Gemini.
 > Batch y streaming escriben las **mismas zonas** (capa servida única).
 
+### Justificación Big Data (las «V») y arquitectura completa
+
+Justifico el carácter Big Data **no solo por Volumen** sino por las dimensiones que
+realmente aplican a mi caso (responde a la observación del tutor; detalle en
+[observaciones.md](observaciones.md)):
+
+| Dimensión | Cómo la argumento |
+|---|---|
+| **Variety** (la más fuerte) | Voz **no estructurada** + CDR **estructurado** + texto derivado → problema **multimodal** [ref. 12] |
+| **Velocity** | **Flujo continuo** de eventos (cada llamada al colgar) procesado *near-real-time* |
+| **Veracity** | Alucinaciones de ASR [ref. 6], calidad/trazabilidad y anonimización → exige gobernanza |
+| **Value** | KPIs de negocio + reducción de **riesgo regulatorio** (multas Superintendencia) |
+| **Volume** | Stream de producción que **crece indefinidamente** + datos derivados + **ASR compute-bound** |
+
+**Argumento central:** una sola máquina *podría* procesar los 100 GB una vez, pero **no
+garantiza** ingesta continua sin pérdida, tolerancia a fallos, reprocesamiento ni
+**escalabilidad horizontal** en un sistema que opera en producción de forma permanente.
+
+**Bloques de la arquitectura Big Data (explícitos):**
+
+| Bloque exigido | Componente en mi solución |
+|---|---|
+| Ingesta distribuida | Apache **Kafka** (evento por llamada) |
+| Almacenamiento masivo / Data Lake | **Medallion** (MinIO/Parquet → S3 en nube) |
+| Procesamiento paralelo | **Spark / PySpark** con speedup medido |
+| Gobernanza y calidad de datos | Capa transversal (ver abajo) |
+| Analítica y consumo | LLM como etapa del pipeline + anomalías + PostgreSQL + tablero |
+
+> El **LLM se integra dentro del ciclo Big Data**: consume la zona **Plata** (texto
+> anonimizado) y produce la zona **Oro** (evaluaciones estructuradas), como una etapa
+> más del pipeline gobernado, no como pieza aislada.
+
 ---
 
 ## Infraestructura objetivo (confirmada)
@@ -69,6 +101,42 @@ Leyenda: ⬜ No iniciada · 🟨 En progreso · ✅ Completada
 | 7 | Capa servida + tablero analítico | Despliegue | ⬜ |
 | 8 | Evaluación vs. línea base | Evaluación | ⬜ |
 | 9 | Despliegue on-premise + capacitación | Despliegue | ⬜ |
+| **T** | **Gobernanza y calidad de datos (transversal)** | Todas | ⬜ |
+
+---
+
+## Componente transversal T — Gobernanza y Calidad de Datos
+
+**Objetivo:** garantizar **calidad, trazabilidad, reproducibilidad y privacidad** del dato
+a lo largo de todo el pipeline (responde directamente a la observación del tutor sobre
+«gobernanza y calidad de datos»). No es una fase secuencial: **atraviesa las Fases 1–9**.
+
+**Justificación metodológica:** DSR → *Rigor* (confiabilidad y reproducibilidad del
+artefacto). CRISP-DM → transversal a *Comprensión/Preparación/Modelado/Evaluación*.
+Refuerza el requisito de **privacidad y trazabilidad** del plan.
+
+**Hitos / pasos:**
+- [ ] **Calidad de datos automática** en cada frontera de zona (Bronce→Plata→Oro) con
+  **Great Expectations / pandera**: esquemas, tipos, rangos, nulos, **unicidad de
+  `call_id`**, cobertura del cruce CDR↔grabación, duración válida.
+- [ ] **Contratos de datos** (esquemas versionados con `pydantic`) entre etapas del pipeline.
+- [ ] **Catálogo + linaje**: registrar de dónde viene cada dato (Bronce) y en qué se
+  transforma (Plata/Oro), con metadatos por llamada (modelo ASR, versión de rúbrica, fecha).
+- [ ] **Versionado**: rúbrica (`rubrica_v1/v2`), modelos y datasets/gold set
+  (**DVC/lakeFS** opcional).
+- [ ] **Privacidad como gobernanza**: auditoría de anonimización, control de acceso a
+  Bronce (dato crudo), política de retención.
+- [ ] **Reproducibilidad**: contenedores + dependencias fijadas + **semillas** + ejecuciones
+  parametrizadas por rango de fechas.
+
+**Checklist de validación:**
+- [ ] Un lote que viola el esquema es **rechazado y reportado** por las validaciones.
+- [ ] Puedo **reconstruir** cualquier registro Oro trazándolo hasta su Bronce (linaje).
+- [ ] Cambiar la rúbrica genera una **nueva versión** sin sobrescribir resultados previos.
+- [ ] Una ejecución con la misma semilla y parámetros **produce el mismo resultado**.
+
+**Entregable:** capa de gobernanza y calidad operativa (reportes de calidad + catálogo/
+linaje + versionado), integrada en el pipeline.
 
 ---
 
@@ -151,12 +219,15 @@ Leyenda: ⬜ No iniciada · 🟨 En progreso · ✅ Completada
 - [ ] **Normalización de audio**: convertir a formato estándar para ASR (mono, 16 kHz, WAV/PCM) con `ffmpeg`, incluyendo los `wav` que nunca se convirtieron a mp3.
 - [ ] Definir el **modelo de datos de la capa servida** (esquema en PostgreSQL: `llamadas`, `transcripciones`, `evaluaciones`, `agentes`, `kpis`).
 - [ ] Escribir resultados intermedios (Parquet) + tabla `llamadas` base.
+- [ ] **Calidad de datos** (Great Expectations/pandera) en la frontera Bronce→Plata: esquema, nulos, unicidad de `call_id`, cobertura del cruce (ver Componente transversal T).
+- [ ] **Criterios de escalabilidad**: ejecutar el mismo job variando núcleos/particiones y registrar el **speedup** (strong/weak scaling) como evidencia distribuida.
 
 **Checklist de validación:**
 - [ ] El job corre por un rango (p. ej. un mes) y produce salida consistente y repetible.
 - [ ] Conteos cuadran (CDR en rango = procesados + descartados con motivo).
 - [ ] Los audios normalizados abren y tienen 16 kHz mono.
 - [ ] Medición de **speedup** al variar núcleos/particiones (evidencia de escalabilidad para el tribunal).
+- [ ] Las validaciones de calidad rechazan y reportan lotes que no cumplen el esquema.
 
 **Entregable:** pipeline batch parametrizable + capa de datos base poblada con una muestra.
 
@@ -192,8 +263,13 @@ Leyenda: ⬜ No iniciada · 🟨 En progreso · ✅ Completada
 
 **Justificación metodológica:** DSR → *Construcción* (núcleo analítico). CRISP-DM → *Modelado*. Cubre **OE3**; habilita las métricas de **OE4**.
 
-**Hitos / pasos:**
-- [ ] Implementar `rubrica_v1` (`proyecto/parametros_calidad_empresa.md`): Grupo A (script), B (palabras prohibidas), C (omisiones), severidades CRÍTICA/MAYOR/MENOR.
+**Definición formal del modelo (Familia A — clasificación de calidad/cumplimiento por llamada):**
+- *Entrada:* transcripción anonimizada y diarizada + variables del CDR.
+- *Técnica:* LLM (Gemini) con la rúbrica + reglas deterministas + *fuzzy-match* de descargos legales exactos.
+- *Salida:* vector de criterios A/B/C, `calidad_score`, `venta_valida` (regla dura), `riesgo_reclamo`, sentimiento.
+- *Métricas:* **Accuracy, Precision, Recall, F1** contra el *gold set*.
+
+**Hitos / pasos:** (`proyecto/parametros_calidad_empresa.md`): Grupo A (script), B (palabras prohibidas), C (omisiones), severidades CRÍTICA/MAYOR/MENOR.
 - [ ] Prompt(s) a **Gemini** con salida **JSON estructurada** (esquema de `guia_etiquetado_calidad.md`): criterios, `calidad_score`, `venta_valida` (regla dura), `riesgo_reclamo`, sentimiento del asesor y trayectoria del cliente.
 - [ ] Detección híbrida: `fuzzy-match` local para descargos legales exactos (A07/C05) + juicio de Gemini para el resto.
 - [ ] **Weak supervision / gold set**: muestreo estratificado + revisión de un auditor (`humano_confirmada`/`humano_corregida`); versionado de rúbrica.
@@ -236,8 +312,12 @@ Leyenda: ⬜ No iniciada · 🟨 En progreso · ✅ Completada
 
 **Justificación metodológica:** DSR → *Construcción*. CRISP-DM → *Modelado*. Cubre **OE3**.
 
-**Hitos / pasos:**
-- [ ] Agregados por agente y ventana (día/semana): contactabilidad, conversión, calidad media, `pct_ventas_validas`, duración media, sentimiento negativo.
+**Definición formal del modelo (Familia B — anomalías y pronóstico por agente/periodo):**
+- *Variables (explícitas):* tasa de contactabilidad, tasa de conversión, calidad media, `% ventas válidas`, duración media, `% sentimiento negativo`, volumen de llamadas, franja horaria.
+- *Técnicas:* **Isolation Forest**, **autoencoders** [ref. 15] y **z-score** (no supervisado); **series temporales** [ref. 16] para el pronóstico de KPIs.
+- *Validación:* confirmación humana de casos marcados + `precision@k`; comparación con el histórico del propio agente y del grupo.
+
+**Hitos / pasos:** (día/semana): contactabilidad, conversión, calidad media, `pct_ventas_validas`, duración media, sentimiento negativo.
 - [ ] Detección de anomalías **no supervisada**: `IsolationForest` / z-score (scikit-learn) sobre histórico del agente y del grupo.
 - [ ] Predicción de KPIs (series temporales) para horarios/días de mayor efectividad.
 - [ ] Confirmación humana de anomalías marcadas (bucle de retroalimentación).
@@ -321,3 +401,4 @@ Leyenda: ⬜ No iniciada · 🟨 En progreso · ✅ Completada
 > Añadir una línea por sesión: fecha · fase · qué se hizo · qué sigue.
 
 - _2026-08-14 · Fase 0 (previo) · Definición de fases, hardware y estrategia. Transcripción del plan y `fases.md` creados. Siguiente: ejecutar Fase 0 (dimensionar VM + scaffold + docker-compose)._
+- _2026-08-14 · Ajuste por observación del tutor · Agregada la justificación Big Data por las «V», el Componente transversal T (Gobernanza y Calidad), criterios de escalabilidad (Fase 2) y la definición formal de los modelos (Familias A y B, Fases 4 y 6). Ver [observaciones.md](observaciones.md). Pendiente: nuevo documento del plan con el reencuadre y decisión del nuevo título._

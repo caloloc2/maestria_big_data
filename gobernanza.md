@@ -81,8 +81,8 @@ datos que cumplen el contrato de su zona de entrada.
 | Bronce → Plata | **unicidad de `call_id`**, nulos en campos clave, rangos de `duration`/`billsec`, **cobertura del cruce** CDR↔grabación, duración dentro de la muestra |
 | Plata → Oro | JSON de evaluación válido (esquema rúbrica), `venta_valida ∈ {0,1}`, `calidad_score ∈ [0,100]` |
 
-> Empiezo con **pandera inline**. Si más adelante necesito **reportes formales** para el
-> tribunal, incorporo **Great Expectations (Data Docs)** sin tocar el pipeline (la capa de
+> Empiezo con **pandera inline**. Si más adelante necesito **reportes formales**
+> incorporo **Great Expectations (Data Docs)** sin tocar el pipeline (la capa de
 > validación está desacoplada).
 
 ---

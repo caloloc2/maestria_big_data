@@ -64,6 +64,8 @@ agentes.
 │   ├── fuentes.md                  #   Tabla de seguimiento de fuentes
 │   └── referencias.bib             #   Bibliografía IEEE (importable a Mendeley)
 ├── lineamientos/                   # Guías y plantilla oficiales de UISRAEL (IEEE, requisitos)
+├── imagenes/
+│   └── arquitectura_completa.html  # ⭐ Diagrama de arquitectura completa (abrir en navegador)
 └── proyecto/                       # Insumos de la parte práctica (rúbricas y guías técnicas)
 ```
 
@@ -103,16 +105,20 @@ transcripción anonimizada).
 
 ## 7. Arquitectura e instrumentos
 
+> **Diagrama completo de arquitectura:** [`imagenes/arquitectura_completa.html`](imagenes/arquitectura_completa.html) — abrir en navegador. Muestra en una sola vista: pipeline Medallion (Bronce/Plata/Oro), Dagster, Kafka, Spark, Whisper/OpenVINO, Gemini, Gobernanza T, Big Data V's, objetivos OE1–OE4.
+
 | Etapa | Herramienta |
 |-------|-------------|
 | Fuente existente | Servidor **Asterisk** + base de datos **MySQL** (CDR) |
-| Ingesta *near-real-time* | **Apache Kafka** (evento de fin de llamada) |
-| Procesamiento por lotes | **Apache Spark / PySpark** (histórico) |
-| Transcripción / ASR | **Whisper** (diarización + anonimización, mitigación de alucinaciones) |
-| Análisis semántico | **LLM local** (datos sensibles) + **LLM vía API** (tareas no sensibles y sentimiento) |
-| Programación | **Python** (pandas, PySpark, ML) |
-| Almacenamiento analítico | Base de datos **relacional** |
-| Consumo | **Tablero analítico** (KPIs de calidad, contactabilidad y rendimiento) |
+| Orquestación | **Dagster** (Software-Defined Assets · linaje nativo · Medallion) |
+| Ingesta *near-real-time* | **Apache Kafka** · sensor Dagster detecta CDR nuevos |
+| Procesamiento por lotes | **Apache Spark / PySpark** · activos Dagster particionados por fecha |
+| Transcripción / ASR | **Whisper** + **OpenVINO** · HOST nativo (GPU Arc en dev · CPU en prod) |
+| Anonimización | **Presidio** + **spaCy ES** + reconocedores propios Ecuador (cédula, tarjeta, teléfono) |
+| Análisis semántico | **Gemini API** (solo texto anonimizado de zona Plata · nunca audio ni PII) |
+| Anomalías | **scikit-learn** (Isolation Forest · z-score) + series temporales |
+| Almacenamiento | **PostgreSQL** (capa servida) · **MinIO/Parquet** (Data Lake Medallion) |
+| Consumo | **Streamlit** (tablero KPIs · alertas prácticas críticas · rendimiento por agente) |
 
 ## 8. Métricas de evaluación
 

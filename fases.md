@@ -194,11 +194,13 @@ realmente aplican a mi caso (responde a la observación del tutor; detalle en
 | **Velocity** | **Flujo continuo** de eventos (cada llamada al colgar) procesado *near-real-time* |
 | **Veracity** | Alucinaciones de ASR [ref. 6], calidad/trazabilidad y anonimización → exige gobernanza |
 | **Value** | KPIs de negocio + reducción de **riesgo regulatorio** (multas Superintendencia) |
-| **Volume** | Stream de producción que **crece indefinidamente** + datos derivados + **ASR compute-bound** |
+| **Volume** | Histórico validado en Fase 1: **24 761 471 CDR** (2018 – ago 2026) + **~100 GB de audio** + crecimiento sostenido de **2,5 – 3,0 M CDR/año**; datos derivados + **ASR compute-bound** |
 
-**Argumento central:** una sola máquina *podría* procesar los 100 GB una vez, pero **no
-garantiza** ingesta continua sin pérdida, tolerancia a fallos, reprocesamiento ni
-**escalabilidad horizontal** en un sistema que opera en producción de forma permanente.
+**Argumento central:** el histórico validado en el diagnóstico —**24,76 millones de CDR**
+y **~100 GB de audio** con crecimiento sostenido de 2,5–3,0 millones de registros por año—
+hace inviable una máquina única en producción: no garantiza ingesta continua sin pérdida,
+tolerancia a fallos, reprocesamiento ni **escalabilidad horizontal** en un sistema que
+opera de forma permanente.
 
 **Bloques de la arquitectura Big Data (explícitos):**
 
@@ -250,7 +252,7 @@ Leyenda: ⬜ No iniciada · 🟨 En progreso · ✅ Completada
 | Fase | Nombre | CRISP-DM | Estado |
 |---|---|---|---|
 | 0 | Fundaciones e infraestructura | Comprensión del negocio | ⬜ |
-| 1 | Diagnóstico y comprensión de datos | Comprensión de los datos | ⬜ |
+| 1 | Diagnóstico y comprensión de datos | Comprensión de los datos | 🟨 |
 | 2 | Preparación batch (Spark) | Preparación de datos | ⬜ |
 | 3 | ASR + anonimización (local) | Preparación de datos | ⬜ |
 | 4 | Análisis de calidad y cumplimiento (Gemini) | Modelado | ⬜ |
@@ -401,29 +403,69 @@ linaje + versionado), integrada en el pipeline.
 
 **Justificación metodológica:** DSR → *Relevancia* (caracterizar el problema real). CRISP-DM → *Comprensión de los datos*. Cubre **OE2 (Diagnosticar)**.
 
+**Hallazgos consolidados (SQL exploratorio 2026-08-18 — universo completo):**
+
+| # | Métrica | Valor | Nota |
+|---|---|---|---|
+| 1 | CDR totales | 24 761 471 | 2018 → 2026-08-18 |
+| 2 | CDR corruptos (`calldate='0000-00-00'`) | 558 021 (2,25 %) | `disposition` y `src` también vacíos → descartar en Bronce |
+| 3 | IVR `pregunta1/2/3` llenos | 31 / 31 / 2 (< 0,001 %) | **descartado como señal analítica** |
+| 4 | `urlrecord` poblado | 33 055 (0,13 %) | ruta determinística marginal — no es fecha de corte, casi nunca se pobló |
+| 5 | Contactabilidad global | 53,16 % | ANSWERED sobre CDR válido (24,20 M) |
+| 6 | Caída interanual 2020 → 2024 | 59,25 % → 45,57 % (Δ −14 pp) | χ² p < 0,001 (efecto TrueCaller) |
+| 7 | `duration` `ANSWERED` (media / máx) | 59,90 s / 7 441 536 s (≈ 86 días) | outliers extremos por `hangup` fallido |
+| 8 | `billsec` `ANSWERED` (media) | 52,46 s | *ringing* medio ≈ 7,4 s |
+| 9 | Núcleo operativo | 11 extensiones ≈ 28 % del volumen | resto = cola larga |
+| 10 | Pico horario / valle | 11h – 12h – 15h / 13h (−90 %) | ventana 09h–18h = 99,3 % |
+| 11 | Día pico / mínimo | martes / sábado (14 % del promedio L-V) | domingo residual |
+| 12 | Filesystem grabaciones | pendiente — script agendado | ver bloque «Script agendado» abajo |
+
+> Fuentes: consultas SQL directas al CDR MySQL de Asterisk (E1–E6). Redactadas en las
+> Tablas 1 y 2 de la sección 1.1 Resultados del documento académico.
+
 **Hitos / pasos:**
-- [ ] Definir el activo Dagster `bronze_cdr` como primera materialización (consulta MySQL por rango de fechas → Parquet).
-- [ ] Conector **solo lectura** a MySQL CDR (forzar decodificación **latin1→UTF-8** para acentos).
-- [ ] Perfilado del CDR: volúmenes por año, distribución de `duration`/`billsec`, `disposition` (contactabilidad), agentes (`src`), destinos (`dst`), calidad de campos.
-- [ ] Analizar `pregunta1/2/3` (respuestas IVR/encuesta) y su utilidad como señal.
-- [ ] **Enlace grabación — camino determinístico (≤ 2023-06-12):** parsear `urlrecord`
+- [x] **Perfilado del CDR (SQL exploratorio):** volúmenes por año, `disposition`, `duration`/`billsec`, top 20 `src`, tasa de llenado IVR, utilización de `urlrecord`, distribución por hora y día de la semana.
+- [x] **`pregunta1/2/3`** analizado y **descartado** como señal analítica por falla de configuración IVR (< 0,001 % de llenado).
+- [ ] **Ruta C — mañana (2026-08-19):** conectarse en tiempo real al MySQL desde la laptop (`pandas.read_sql` + PyMySQL/JDBC, `latin1 → UTF-8`) y crear `notebooks/00_diagnostico.ipynb` que replica las consultas E1–E6, genera figuras (histograma horario, día de la semana, evolución de contactabilidad interanual) y exporta Tablas 1 y 2 en PNG/HTML para el capítulo académico.
+- [ ] Ejecutar `/root/diagnostico_audio.sh` en horario no laboral (agendado con `at 19:35`) y descargar `/tmp/diag/audio_index.tsv.gz` a la laptop para caracterizar el filesystem de grabaciones en el notebook.
+- [ ] **Filtro de registros corruptos (Bronce):** descartar `calldate = '0000-00-00 00:00:00'` (2,25 %), coincidentes con `disposition` y `src` vacíos.
+- [ ] **Filtro de outliers de duración (Bronce → Plata):** `billsec ∈ [10 s, 3 600 s]` para neutralizar llamadas no cerradas por `hangup` fallido.
+- [ ] **Enlace grabación — camino determinístico (0,13 % del universo, 33 055 CDR):** parsear `urlrecord` cuando exista
   (`http://192.168.0.40/monitor/111111111111/{ext}/OUT/{ts}-{ext}-{seq}.mp3`) →
   ruta local `/home/grabacion/monitor/111111111111/...`.
-- [ ] **Enlace grabación — camino reconstruido (> 2023-06-12, `urlrecord` vacío):**
+- [ ] **Enlace grabación — camino reconstruido (99,87 % del universo, camino PRINCIPAL):**
   construir un **índice del filesystem** (walk recursivo de `.mp3` y `.wav`), parsear
   nombres `{YYYYMMDDHHmmss}-{ext}-{seq}`, y emparejar con CDR por `(timestamp≈calldate, ext=src)`.
 - [ ] Manejar **archivos regados** (no siempre bajo `{ext}/OUT/`) con el índice global.
 - [ ] Reporte de **tasa de emparejamiento**: % con `urlrecord`, % reconstruidos, % huérfanos (CDR sin audio / audio sin CDR), % `wav` sin convertir.
-- [ ] Definir criterios de **muestra representativa** (rango de fechas + duración mín/máx) para el resto del proyecto.
+- [ ] **Muestra representativa definida:** `disposition = ANSWERED` + `billsec ∈ [10, 3 600]` + `calldate` válida + rango de fechas por acordar con la empresa.
+- [ ] Definir el activo Dagster `bronze_cdr` como primera materialización (consulta MySQL por rango de fechas → Parquet). *Requiere Ruta B / Fase 0 lista.*
+
+**Script agendado (horario no laboral, caracterización del filesystem):**
+
+```bash
+# /root/diagnostico_audio.sh — ejecutar con: at 19:35 o nohup + disown
+# Produce en /tmp/diag/:
+#   du_total.txt, du_L1.txt, df.txt, count_ext.txt,
+#   sample_mp3.txt, sample_wav.txt, count_year.txt,
+#   agent_folders.txt, count_regados.txt,
+#   audio_index.tsv.gz    (índice completo comprimido)
+# ionice -c3 nice -n 19 para no impactar Asterisk en producción.
+```
+
+Copiar `/tmp/diag/audio_index.tsv.gz` a la laptop (`scp`/`rsync`) y cargarlo en
+`notebooks/00_diagnostico.ipynb` para completar las filas 11–12 de la Tabla 1 con
+cifras reales de audio (tamaño total, `.mp3` vs `.wav`, archivos regados, etc.).
 
 **Checklist de validación:**
 - [ ] Los acentos del español se leen correctamente (no *mojibake*).
 - [ ] Para una muestra de 50 CDR con `urlrecord`, el archivo existe en disco (verificación 1:1).
-- [ ] Para una muestra > 2023-06-12, el reconstructor encuentra el audio correcto (validado a oído en 10 casos).
+- [ ] Para una muestra sin `urlrecord`, el reconstructor encuentra el audio correcto (validado a oído en 10 casos).
 - [ ] Reporte de diagnóstico generado con métricas de cobertura y calidad.
 - [ ] Definida y documentada la muestra (criterios reproducibles).
+- [ ] `notebooks/00_diagnostico.ipynb` versionado en el repo y reproducible.
 
-**Entregable:** informe de diagnóstico de datos + módulo de **resolución de enlace CDR↔grabación** + activo Dagster `bronze_audio_index` + dataset de muestra emparejado y trazable.
+**Entregable:** informe de diagnóstico de datos + módulo de **resolución de enlace CDR↔grabación** + activo Dagster `bronze_audio_index` + dataset de muestra emparejado y trazable + notebook reproducible con las Tablas 1 y 2 del capítulo académico.
 
 ---
 
@@ -438,7 +480,7 @@ linaje + versionado), integrada en el pipeline.
 - [ ] Job **PySpark** parametrizado por rango de fechas que lee CDR (JDBC) + índice de grabaciones.
 - [ ] Limpieza y normalización: tipos, teléfonos, deduplicado, `disposition` canónica.
 - [ ] Cruce CDR↔grabación a escala (reutiliza el resolvedor de la Fase 1).
-- [ ] Filtrado de la muestra por criterios de duración (descartar fallidas/anómalas).
+- [ ] Filtrado de la muestra por criterios de duración: `disposition = ANSWERED` + `billsec ∈ [10 s, 3 600 s]` (descarta llamadas no cerradas por `hangup` fallido — hallazgo Fase 1).
 - [ ] **Normalización de audio**: convertir a formato estándar para ASR (mono, 16 kHz, WAV/PCM) con `ffmpeg`, incluyendo los `wav` que nunca se convirtieron a mp3.
 - [ ] Definir el **modelo de datos de la capa servida** (esquema en PostgreSQL: `llamadas`, `transcripciones`, `evaluaciones`, `agentes`, `kpis`).
 - [ ] Escribir resultados intermedios (Parquet) + tabla `llamadas` base.
@@ -638,6 +680,17 @@ Whisper worker (HOST nativo, fuera de Docker):
 - [ ] Documentación de operación + manual del tablero.
 - [ ] **Capacitación** a directivos, auditoría/calidad y gerentes (uso del tablero, alertas).
 
+**Recomendaciones a la infraestructura fuente (entregable adicional al cliente):**
+
+Derivadas del diagnóstico Fase 1, exceden el alcance del artefacto pero se documentan
+como mejoras accionables para la operación técnica de la empresa:
+
+- [ ] Reparar la configuración del IVR o retirar los campos `pregunta1/2/3` del esquema del CDR (tasa de llenado < 0,001 %).
+- [ ] Reactivar la persistencia de `urlrecord` en el PBX para nuevas grabaciones (hoy vacío en 99,87 % del histórico).
+- [ ] Instrumentar la conversión WAV → MP3 con reintentos robustos (el script `hangup` actual falla intermitente).
+- [ ] Monitorear cierres anómalos de llamada que generan `billsec` de horas o días (máx observado ≈ 86 días por `hangup` no ejecutado).
+- [ ] Incorporar un identificador determinístico embebido en el `INSERT` del CDR que apunte al archivo de grabación (elimina la dependencia frágil del patrón de nombre de archivo para el linkage futuro).
+
 **Checklist de validación:**
 - [ ] El sistema se recupera solo tras un reinicio de la VM.
 - [ ] Procesa llamadas reales de forma continua durante un periodo de prueba.
@@ -656,3 +709,4 @@ Whisper worker (HOST nativo, fuera de Docker):
 - _2026-08-14 · Gobernanza definida · Creada la carta [gobernanza.md](gobernanza.md) (claves `uniqueid`/`linkedid`, retención por sensibilidad LOPDP, acceso solo autor, pandera inline, versionado carpeta/fecha, umbral cruce ≥ 95 % + precisión linkage). Añadidas 2 referencias al `.bib` (batini2009, christen2012). Enlazada como entregable de Fase 0._
 - _2026-08-15 · Reunión con tutor + decisiones arquitectónicas · **Tutor aprobó el plan** con observación de orquestación. Decisiones cerradas: (1) Dagster como orquestador (sobre Airflow por alineación nativa con Medallion + menor RAM + linaje integrado); (2) arquitectura híbrida validada: Docker para Kafka/Dagster/Spark/PostgreSQL/Streamlit, Whisper worker nativo en HOST via OpenVINO; (3) desarrollar localmente en laptop (Core Ultra 9 / Arc 140V) antes de desplegar en VM ESXi. Validado experimentalmente: `/dev/dxg` pasa a Docker pero compute-runtime estándar Intel solo expone CPU — Whisper corre fuera de Docker._
 - _2026-08-16 · **INICIO IMPLEMENTACIÓN — Fase 0** · Fases actualizadas con Dagster, arquitectura híbrida Whisper HOST+OpenVINO, estructura monorepo, DAG Dagster esqueleto, configuración docker-compose con Dagster. Próximo paso: crear monorepo, docker-compose, primer activo Dagster, validar Whisper worker con OpenVINO en Arc 140V._
+- _2026-08-18 · **Fase 1 parcial (SQL exploratorio) + capítulo académico 1.1** · Perfilado agregado del CDR sobre el universo completo (24 761 471 registros): distribución anual, `disposition`, hora del día, día de la semana, top 20 agentes, tasa de llenado IVR, utilización de `urlrecord`. Hallazgos que recalibran el plan: (a) volumen real 24,76 M CDR — dos órdenes de magnitud sobre la cifra referencial del planteamiento (100 000); (b) `urlrecord` poblado solo en 0,13 % → linkage por reconstrucción filesystem pasa a ser camino PRINCIPAL (no fallback); (c) IVR descartado como señal (< 0,001 % de llenado); (d) 2,25 % de CDR corruptos + outliers de `billsec` (máx 86 días) → filtros formalizados; (e) caída interanual de contactabilidad −14 pp entre 2020 y 2024, χ² p < 0,001, coherente con adopción de TrueCaller. Redactadas secciones **1.1 Resultados** (con Tablas 1 y 2) y **1.1 Discusión** del documento académico. Agendado `/root/diagnostico_audio.sh` en horario no laboral para caracterización del filesystem de audio. Actualizada Fase 1 con hitos recalibrados + filtros de calidad; Fase 2 con criterio de muestra `billsec ∈ [10, 3600]`; Fase 9 con recomendaciones a la fuente; tablero global Fase 1 → 🟨. **Siguiente (mañana 2026-08-19): Ruta C** — conectar la laptop en vivo al MySQL de producción + carpeta de grabaciones, crear `notebooks/00_diagnostico.ipynb` que replique las consultas E1–E6, cargar `audio_index.tsv.gz` y cerrar Fase 1 con evidencia técnica reproducible. **Después: Ruta B** — scaffold del monorepo + `docker-compose.yml` de Fase 0._

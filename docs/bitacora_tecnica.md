@@ -542,6 +542,12 @@ turnos ASESOR/CLIENTE anonimizado. Rol correcto (asesor = pitch; cliente = respu
 llamadas relevantes** (contestadas + largas, ~1,7 % del volumen), NO las 98 % cortas, para que
 el streaming sea sostenible. Alternativa futura: acelerar diarización (GPU/otra librería).
 
+### F.4 Ejemplos largos CON diarización (para documentación)
+
+`whisper_worker/demo_diarizado.py`: regenera las 2 llamadas más largas con turnos
+ASESOR/CLIENTE, en versión cruda y anonimizada (`data/muestra/ejemplos/*.DIAR_*.txt`).
+Corre en 2º plano (diarización CPU ~0,8×, lenta). [Completar con resultados al terminar.]
+
 ### F.3 Pendiente de Bloque B (en orden)
 
 1. Completar `worker.py`: normalización (decodificación robusta de mp3) + **anti-alucinación**
@@ -551,4 +557,44 @@ el streaming sea sostenible. Alternativa futura: acelerar diarización (GPU/otra
 3. **Anonimización** (Presidio + spaCy ES: cédula módulo 10, tarjeta Luhn, teléfonos, nombres).
 4. Asset `silver_transcriptions` (Dagster) integrado por Kafka + validación 0 fugas PII.
 5. **Benchmark formal GPU vs CPU** sobre N audios (protocolo Parte E.7).
+
+---
+
+## Parte G — Fase 4: análisis de calidad/cumplimiento (Gemini) — EN CURSO
+
+Análisis **híbrido** sobre el texto **anonimizado** (única entrada que sale a la nube).
+Figura: `docs/figuras/fase4_analisis_hibrido.svg`. Rúbrica: `proyecto/parametros_calidad_empresa.md`
+(rubrica_v1: 9 criterios de script A, 18 palabras prohibidas B, 6 omisiones C, severidades).
+
+### G.1 Capa determinista (`src/analysis/rubrica.py`) — sin LLM, probada
+
+Detecta lo verificable sin red: palabras prohibidas (B, con normalización de acentos y
+condicionales B05/B06 "salvables" por contexto) y el descargo legal (A07/C05, por ancla
+"seguro de desgravamen"). **Probada sobre las 25 transcripciones reales (2025-05-14):**
+- Palabras prohibidas: **B16** (sorteo/regalo/bono) en 2, **B13**, **B07**, **B11** en 1 c/u.
+- **25/25 sin descargo legal (C05)** → todas marcadas críticas por la regla base. **Hallazgo:**
+  son llamadas cortas (152 s prom) que NO llegan al cierre → **la regla C05/A07 solo debe
+  exigirse si `es_venta=1`**. Se corrigió en `schema.aplicar_reglas_duras` (descarta A07/C05 si
+  no hubo venta). Refuerza la necesidad de clasificar `es_venta` (lo hace la capa LLM).
+
+### G.2 Esquema y reglas duras (`src/analysis/schema.py`)
+
+`Evaluacion` (pydantic): grupo_A, grupo_B_infracciones, grupo_C_omisiones, es_venta,
+calidad_score (0-100), venta_valida, riesgo_reclamo, sentimientos, fuente_etiqueta, confianza.
+`aplicar_reglas_duras`: **venta_valida=0** ante A03/A07 fallidos, B críticas (B01-B10,B17), o C05
+— con A07/C05 exigidos **solo si es_venta=1**.
+
+### G.3 Capa LLM (`src/analysis/gemini_eval.py`) — lista, pendiente de clave
+
+Sobre texto anonimizado, Gemini evalúa A01-A09, sentimiento, es_venta, omisiones C; se combina
+con la B determinista y se aplican reglas duras. `calidad_score` = % de A cumplidos (pesos finos
+se calibran con gold set). Requiere **GEMINI_API_KEY en .env** + `pip install google-generativeai`.
+Modelo configurable (`GEMINI_MODEL`, default gemini-2.0-flash), `temperature=0`, salida JSON.
+
+### G.4 Pendiente Fase 4
+
+1. **GEMINI_API_KEY** del tesista en `.env` → instalar SDK → correr sobre la muestra.
+2. Activo Dagster `gold_evaluations` (dep silver_transcriptions) que persiste evaluaciones.
+3. Gold set (weak supervision): muestreo estratificado + revisión de auditor; métricas P/R/F1.
+4. Calibrar pesos de `calidad_score` con Auditoría; variantes/sinónimos de palabras prohibidas.
 

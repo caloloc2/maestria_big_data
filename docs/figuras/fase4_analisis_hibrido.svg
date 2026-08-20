@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="290" viewBox="0 0 680 290" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="680" height="290" fill="#ffffff"/>
+  <style>
+    .t{font-size:14px;fill:#2C2C2A}.th{font-size:14px;font-weight:600;fill:#2C2C2A}
+    .ts{font-size:12px;fill:#5F5E5A}
+    .tealt{fill:#04342C}.teals{fill:#0F6E56}.bluet{fill:#042C53}.blues{fill:#185FA5}
+  </style>
+  <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#5F5E5A"/></marker></defs>
+
+  <text class="ts" x="30" y="22">Fase 4 — análisis híbrido de calidad / cumplimiento (rubrica_v1)</text>
+
+  <rect x="30" y="104" width="124" height="64" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text class="th" x="92" y="132" text-anchor="middle">Transcripción</text>
+  <text class="ts" x="92" y="150" text-anchor="middle">anonimizada</text>
+
+  <rect x="186" y="40" width="210" height="64" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="th tealt" x="291" y="68" text-anchor="middle">Capa determinista</text>
+  <text class="ts teals" x="291" y="87" text-anchor="middle">palabras prohibidas + descargo</text>
+
+  <rect x="186" y="160" width="210" height="64" rx="8" fill="#E6F1FB" stroke="#185FA5"/>
+  <text class="th bluet" x="291" y="188" text-anchor="middle">Capa LLM · Gemini</text>
+  <text class="ts blues" x="291" y="207" text-anchor="middle">criterios A · sentimiento · venta</text>
+
+  <rect x="428" y="104" width="96" height="64" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text class="th" x="476" y="130" text-anchor="middle">Reglas duras</text>
+  <text class="ts" x="476" y="148" text-anchor="middle">(schema)</text>
+
+  <rect x="540" y="104" width="100" height="64" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="th tealt" x="590" y="130" text-anchor="middle">Evaluación</text>
+  <text class="ts teals" x="590" y="148" text-anchor="middle">JSON</text>
+
+  <g stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#ah)" fill="none">
+    <line x1="154" y1="128" x2="184" y2="82"/>
+    <line x1="154" y1="144" x2="184" y2="190"/>
+    <line x1="396" y1="76" x2="426" y2="122"/>
+    <line x1="396" y1="192" x2="426" y2="150"/>
+    <line x1="524" y1="136" x2="538" y2="136"/>
+    <line x1="590" y1="168" x2="590" y2="222"/>
+  </g>
+
+  <rect x="30" y="224" width="610" height="42" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-dasharray="5 3"/>
+  <text class="th" x="335" y="249" text-anchor="middle">gold_evaluations → KPIs y anomalías por agente (Fase 6)</text>
+
+  <text class="ts" x="30" y="284">Solo texto anonimizado sale a Gemini · venta_valida=0 ante cualquier infracción crítica</text>
+</svg>

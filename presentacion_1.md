@@ -228,6 +228,32 @@ ASESOR:  No se preocupe, <NOMBRE>. Le mencionaba que...
 *(La versión "cruda" conserva los nombres reales; la anonimizada — la única que envío a Gemini —
 los reemplaza por `<NOMBRE>`, `<TELEFONO>`, `<CEDULA>`, `<TARJETA>`, `<DATO_NUMERICO>`.)*
 
+### 5.6 Benchmark de modelos ASR: `small` vs `medium`
+
+Comparé ambos modelos sobre las mismas llamadas (misma GPU) para decidir si vale la pena subir
+de modelo:
+
+![Benchmark small vs medium](docs/figuras/benchmark_small_vs_medium.svg)
+
+| Modelo | Llamada larga (33 min) | Llamada media (3 min) | RTF |
+|---|---|---|---|
+| **small** | 88 s | 16 s | ~0,05× |
+| **medium** | 423 s | 48 s | ~0,21× (**≈ 5× más lento**) |
+
+**Comparación de exactitud (mismo fragmento):**
+
+| | Texto |
+|---|---|
+| **small** | *"…asesora internacional de la Corporación Marketing **BIP**, diante internacional Springium a la ciudad de Quito…"* |
+| **medium** | *"…asesor internacional de la corporación Marketing **Book**, **viajes internacionales premium** a la ciudad de Quito…"* |
+
+**Conclusión (honesta):** `medium` mejora la **fluidez** (frases más coherentes) pero **no
+corrige los nombres propios** (dice "Book", ninguno acierta "VIP") y cuesta **~5× más tiempo**.
+El límite real de exactitud es la **calidad del audio** (telefónico mono a 8 kbps), no el tamaño
+del modelo. **Decisión:** mantengo `small` para esta versión; la mejora de exactitud vendrá más
+del audio/adaptación al dominio que de un modelo más grande. (Con GPU NVIDIA, `medium` sería
+viable si se quisiera esa fluidez extra.)
+
 ---
 
 ## 6. Lo que sigue y pendientes por pulir
@@ -238,8 +264,9 @@ los reemplaza por `<NOMBRE>`, `<TELEFONO>`, `<CEDULA>`, `<TARJETA>`, `<DATO_NUME
 3. **Fase 6 — Anomalías:** detección no supervisada de rendimiento por agente/periodo.
 
 **Tengo por pulir (calidad, lo dejé para después de la validación del tutor):**
-4. **Modelo ASR superior** (`medium`/`large-v3`): el `small` que uso hoy tiene errores
-   ("Marketing BIP" ≈ VIP, "Banco Pincel" ≈ Pichincha) → haré un benchmark de tiempo vs exactitud.
+4. **Modelo ASR:** ya comparé `small` vs `medium` (§5.6) → `medium` es ~5× más lento y solo
+   mejora la fluidez, sin corregir nombres propios (mantengo `small`). Pendiente: probar
+   `large-v3` con GPU NVIDIA y evaluar adaptación al dominio / mejora del audio de origen.
 5. **Afinar la sobre-redacción:** hoy es agresiva del lado seguro (marca "Claro", "Pichincha"
    como nombre) → agregaré una lista blanca de marcas/lugares.
 6. **Diarización:** algún turno corto queda sin rol (`?`); mejora con GPU y ajuste de umbrales.

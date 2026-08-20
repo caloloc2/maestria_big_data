@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="340" viewBox="0 0 700 340" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="700" height="340" fill="#ffffff"/>
+  <style>.t{font-size:14px;fill:#2C2C2A}.th{font-size:14px;font-weight:600;fill:#2C2C2A}.ts{font-size:12px;fill:#5F5E5A}</style>
+
+  <text class="ts" x="40" y="24">Benchmark ASR: RTF (tiempo proceso ÷ audio) — menor es más rápido · GPU Arc</text>
+  <rect x="430" y="34" width="14" height="14" rx="3" fill="#E1F5EE" stroke="#0F6E56"/><text class="ts" x="450" y="45">small</text>
+  <rect x="510" y="34" width="14" height="14" rx="3" fill="#FAEEDA" stroke="#BA7517"/><text class="ts" x="530" y="45">medium</text>
+
+  <line x1="80" y1="270" x2="660" y2="270" stroke="#5F5E5A" stroke-width="1.4"/>
+
+  <rect x="150" y="235" width="60" height="35" rx="3" fill="#E1F5EE" stroke="#0F6E56"/>
+  <rect x="216" y="100" width="60" height="170" rx="3" fill="#FAEEDA" stroke="#BA7517"/>
+  <text class="ts" x="180" y="229" text-anchor="middle">0,044×</text>
+  <text class="ts" x="246" y="94"  text-anchor="middle">0,212×</text>
+  <text class="t"  x="213" y="290" text-anchor="middle">Llamada larga (33 min)</text>
+
+  <rect x="430" y="204" width="60" height="66" rx="3" fill="#E1F5EE" stroke="#0F6E56"/>
+  <rect x="496" y="67"  width="60" height="203" rx="3" fill="#FAEEDA" stroke="#BA7517"/>
+  <text class="ts" x="460" y="198" text-anchor="middle">0,082×</text>
+  <text class="ts" x="526" y="61"  text-anchor="middle">0,254×</text>
+  <text class="t"  x="493" y="290" text-anchor="middle">Llamada media (3 min)</text>
+
+  <text class="th" x="40" y="316">medium ≈ 5× más lento que small · fluidez algo mejor, pero NO corrige nombres propios (límite = audio 8 kbps)</text>
+</svg>

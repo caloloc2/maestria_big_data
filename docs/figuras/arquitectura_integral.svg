@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="850" viewBox="0 0 860 850" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="860" height="850" fill="#ffffff"/>
+  <style>
+    .t{font-size:13px;fill:#2C2C2A}.th{font-size:13px;font-weight:600;fill:#2C2C2A}
+    .ts{font-size:11px;fill:#5F5E5A}.zone{font-size:13px;font-weight:600}
+    .tealt{fill:#04342C}.teals{fill:#0F6E56}.bluet{fill:#042C53}.blues{fill:#185FA5}
+    .ambt{fill:#412402}.ambs{fill:#854F0B}.purt{fill:#26215C}
+  </style>
+  <defs><marker id="ah" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto"><path d="M0,0 L6.5,3 L0,6" fill="none" stroke="#5F5E5A" stroke-width="1.2"/></marker></defs>
+
+  <text x="24" y="30" font-size="17" font-weight="600" fill="#2C2C2A">Arquitectura y orquestación — Pipeline Big Data de calidad de llamadas (MKV)</text>
+  <text class="ts" x="24" y="50">Dagster orquesta las zonas Medallion · Kafka (KRaft) desacopla el ASR · recuadro punteado = LAN on-premise (audio y PII no salen) · Gemini recibe SOLO texto anonimizado</text>
+
+  <rect x="12" y="66" width="624" height="762" rx="10" fill="none" stroke="#888780" stroke-dasharray="6 4"/>
+
+  <rect x="20" y="96" width="26" height="690" rx="6" fill="#EEEDFE" stroke="#534AB7"/>
+  <text class="th purt" transform="rotate(-90 33 441)" x="33" y="441" text-anchor="middle">DAGSTER — orquesta todas las zonas</text>
+
+  <text class="zone" x="222" y="186" text-anchor="end" fill="#5F5E5A">BRONCE</text>
+  <text class="zone" x="222" y="410" text-anchor="end" fill="#0F6E56">PLATA</text>
+  <text class="zone" x="222" y="637" text-anchor="end" fill="#854F0B">ORO</text>
+  <text class="zone" x="222" y="737" text-anchor="end" fill="#185FA5">SERVIDO</text>
+
+  <rect x="250" y="96"  width="230" height="46" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text class="th" x="365" y="116" text-anchor="middle">Asterisk — Fuente (LAN)</text>
+  <text class="ts" x="365" y="132" text-anchor="middle">CDR (MariaDB) + grabaciones</text>
+
+  <rect x="250" y="160" width="230" height="46" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text class="th" x="365" y="180" text-anchor="middle">bronze_cdr · bronze_audio_index</text>
+  <text class="ts" x="365" y="196" text-anchor="middle">Parquet particionado por día</text>
+
+  <rect x="250" y="224" width="230" height="46" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="th tealt" x="365" y="244" text-anchor="middle">silver_calls</text>
+  <text class="ts teals" x="365" y="260" text-anchor="middle">cruce CDR↔grabación (Spark)</text>
+
+  <rect x="250" y="288" width="230" height="46" rx="8" fill="#E6F1FB" stroke="#185FA5"/>
+  <text class="th bluet" x="365" y="308" text-anchor="middle">Kafka (KRaft)</text>
+  <text class="ts blues" x="365" y="324" text-anchor="middle">asr.jobs / asr.results</text>
+
+  <rect x="250" y="352" width="230" height="46" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="th tealt" x="365" y="372" text-anchor="middle">Whisper worker</text>
+  <text class="ts teals" x="365" y="388" text-anchor="middle">transcripción (GPU) + anti-alucinación</text>
+
+  <rect x="250" y="416" width="230" height="46" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="th tealt" x="365" y="436" text-anchor="middle">Diarización (pyannote)</text>
+  <text class="ts teals" x="365" y="452" text-anchor="middle">separa asesor / cliente</text>
+
+  <rect x="250" y="480" width="230" height="46" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="2.5"/>
+  <text class="th tealt" x="365" y="500" text-anchor="middle">Anonimización (Presidio)</text>
+  <text class="ts teals" x="365" y="516" text-anchor="middle">◄ FRONTERA PII (cédula/tarjeta/tel/nombres)</text>
+
+  <rect x="250" y="544" width="230" height="46" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="th tealt" x="365" y="564" text-anchor="middle">silver_transcriptions</text>
+  <text class="ts teals" x="365" y="580" text-anchor="middle">texto anonimizado + diarizado</text>
+
+  <rect x="250" y="608" width="230" height="46" rx="8" fill="#FAEEDA" stroke="#BA7517"/>
+  <text class="th ambt" x="365" y="628" text-anchor="middle">gold_evaluations</text>
+  <text class="ts ambs" x="365" y="644" text-anchor="middle">rúbrica determinista + Gemini</text>
+
+  <rect x="250" y="672" width="230" height="46" rx="8" fill="#E6F1FB" stroke="#185FA5"/>
+  <text class="th bluet" x="365" y="692" text-anchor="middle">PostgreSQL — capa servida</text>
+  <text class="ts blues" x="365" y="708" text-anchor="middle">llamadas · transcripciones · evaluaciones</text>
+
+  <rect x="250" y="736" width="230" height="46" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-dasharray="5 3"/>
+  <text class="th" x="365" y="756" text-anchor="middle">Tablero (Streamlit)</text>
+  <text class="ts" x="365" y="772" text-anchor="middle">KPIs · riesgo · agente — Fase 7 (próximo)</text>
+
+  <g stroke="#5F5E5A" stroke-width="1.4" marker-end="url(#ah)" fill="none">
+    <line x1="365" y1="142" x2="365" y2="158"/>
+    <line x1="365" y1="206" x2="365" y2="222"/>
+    <line x1="365" y1="270" x2="365" y2="286"/>
+    <line x1="365" y1="334" x2="365" y2="350"/>
+    <line x1="365" y1="398" x2="365" y2="414"/>
+    <line x1="365" y1="462" x2="365" y2="478"/>
+    <line x1="365" y1="526" x2="365" y2="542"/>
+    <line x1="365" y1="590" x2="365" y2="606"/>
+    <line x1="365" y1="654" x2="365" y2="670"/>
+    <line x1="365" y1="718" x2="365" y2="734"/>
+  </g>
+
+  <text class="ts" x="496" y="123">192.168.0.40 · SOLO LECTURA</text>
+  <text class="ts" x="496" y="187">7,06 M grab. · 858 GB (alcance 424 GB)</text>
+  <text class="ts" x="496" y="251">cobertura 100% · speedup 6,9×</text>
+  <text class="ts" x="496" y="315">bus liviano (sin Zookeeper)</text>
+  <text class="ts" x="496" y="379">NODO GPU · RTF 0,05× (18× real)</text>
+  <text class="ts" x="496" y="443">CPU · RTF ~0,8× (cuello de botella)</text>
+  <text class="ts" x="496" y="507">0 fugas de PII validadas</text>
+  <text class="ts" x="496" y="571">único texto que sale a la nube</text>
+  <text class="ts" x="496" y="699">3 tablas servidas</text>
+
+  <rect x="648" y="600" width="196" height="66" rx="10" fill="#EEEDFE" stroke="#534AB7"/>
+  <text class="th purt" x="746" y="626" text-anchor="middle">Google Gemini (nube)</text>
+  <text class="ts" x="746" y="644" text-anchor="middle" fill="#534AB7">análisis sobre texto anonimizado</text>
+
+  <g stroke="#534AB7" stroke-width="1.4" marker-end="url(#ah)" fill="none">
+    <line x1="480" y1="624" x2="646" y2="620"/>
+  </g>
+  <g stroke="#534AB7" stroke-width="1.4" marker-end="url(#ah)" fill="none" stroke-dasharray="4 3">
+    <line x1="646" y1="648" x2="482" y2="640"/>
+  </g>
+  <text class="ts" x="500" y="612" fill="#534AB7">texto anon →</text>
+
+  <text class="th" x="655" y="700">Reparto por máquina</text>
+  <text class="ts" x="655" y="720">• NODO GPU (ASR + diarización):</text>
+  <text class="ts" x="665" y="736">laptop / equipo nuevo</text>
+  <text class="ts" x="655" y="756">• STACK 24/7 (Dagster, Kafka,</text>
+  <text class="ts" x="665" y="772">PostgreSQL, Spark, tablero):</text>
+  <text class="ts" x="665" y="788">servidor / equipo nuevo</text>
+
+  <text class="ts" x="655" y="120" fill="#5F5E5A">Disparo BATCH:</text>
+  <text class="ts" x="655" y="136">Dagster por fechas (Spark)</text>
+  <text class="ts" x="655" y="160" fill="#5F5E5A">Disparo STREAMING:</text>
+  <text class="ts" x="655" y="176">sensor de llamada nueva</text>
+  <text class="ts" x="655" y="192">(Fase 5, próximo)</text>
+</svg>

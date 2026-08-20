@@ -16,9 +16,29 @@
 !/lineamientos/
 !/proyecto/
 !/defensa_plan_titulacion.pptx
+
+# 2b) Código de implementación (monorepo) — SÍ se versiona
+!/.env.example
+!/infra/
+!/notebooks/
+!/src/
+!/scripts/
+!/whisper_worker/
+!/tests/
+!/docs/
+
+# 2c) Datos y artefactos locales — NUNCA se versionan (crudos, PII, pesados)
+/data/
+**/__pycache__/
+**/.ipynb_checkpoints/
+*.parquet
+*.tsv.gz
+
 # 3) Defensa extra: secretos y temporales nunca se suben aunque se incluyan carpetas
 .gemini_key
+.env
 *.env
+!/.env.example
 /graphify-out/
 
 # ─────────────────────────────────────────────────────────────

@@ -1,0 +1,25 @@
+# Perfil de diagnóstico — Fase 1 / Ruta C
+# Levantar desde la raíz del repo:
+#   docker compose -f infra/diagnostico/docker-compose.yml up --build
+# Luego abrir  http://localhost:8888/lab  y ejecutar  notebooks/00_diagnostico.py
+services:
+  diagnostico:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: uisrael_diagnostico
+    # No usar `env_file`: NO recorta comentarios en línea del .env y contamina los
+    # valores. En su lugar montamos el .env en /work/.env y lo lee python-dotenv
+    # (`load_dotenv()` en el notebook), que sí maneja comentarios y comillas.
+    ports:
+      - "8888:8888"
+    volumes:
+      - ../../notebooks:/work/notebooks
+      - ../../src:/work/src
+      - ../../data:/work/data          # salidas de diagnóstico (gitignored)
+      - ../../.env:/work/.env:ro       # credenciales -> leídas por python-dotenv
+      - ~/.ssh:/root/.ssh:ro           # llaves para scp del índice de audio (opcional)
+    working_dir: /work
+    restart: unless-stopped
+    # Nota: en Docker Desktop (WSL2) el contenedor alcanza IPs de la LAN por el bridge.
+    # Si el MySQL no respondiera, probar añadiendo:  network_mode: host  (solo Linux).

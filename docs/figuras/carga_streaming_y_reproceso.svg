@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="300" viewBox="0 0 680 300" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="680" height="300" fill="#ffffff"/>
+  <style>
+    .cap{font-size:13px;fill:#5F5E5A}.big{font-size:22px;font-weight:500}.lb{font-size:12px;fill:#5F5E5A}
+    .tealn{fill:#0F6E56}.bluen{fill:#185FA5}
+  </style>
+
+  <text class="cap" x="40" y="26">Carga de streaming y reproceso — alcance 200-299/OUT (mayo 2025 + índice del corpus)</text>
+  <text class="lb" x="40" y="44" fill="#0F6E56">Streaming (una llamada al terminar)</text>
+
+  <rect x="40"  y="52" width="186" height="86" rx="12" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="big tealn" x="56" y="92">98,3 %</text>
+  <text class="lb" x="56" y="112">cortas &lt;5 min</text>
+  <text class="lb" x="56" y="128">150 935 grabaciones</text>
+
+  <rect x="247" y="52" width="186" height="86" rx="12" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="big tealn" x="263" y="92">0,8 %</text>
+  <text class="lb" x="263" y="112">largas ≥10 min (1 165)</text>
+  <text class="lb" x="263" y="128">promedio 18 min</text>
+
+  <rect x="454" y="52" width="186" height="86" rx="12" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="big tealn" x="470" y="92">20 / h</text>
+  <text class="lb" x="470" y="112">pico de largas · 45/día</text>
+  <text class="lb" x="470" y="128">1 nodo procesa 35-61/h</text>
+
+  <text class="lb" x="40" y="164" fill="#185FA5">Reproceso total del corpus (histórico completo)</text>
+
+  <rect x="40"  y="172" width="186" height="86" rx="12" fill="#E6F1FB" stroke="#185FA5"/>
+  <text class="big bluen" x="56" y="212">126 500 h</text>
+  <text class="lb" x="56" y="232">audio total (7,06 M)</text>
+  <text class="lb" x="56" y="248">455,5 GB</text>
+
+  <rect x="247" y="172" width="186" height="86" rx="12" fill="#E6F1FB" stroke="#185FA5"/>
+  <text class="big bluen" x="263" y="212">290 días</text>
+  <text class="lb" x="263" y="232">reproceso total · 1 nodo GPU</text>
+  <text class="lb" x="263" y="248">CPU ~506 días</text>
+
+  <rect x="454" y="172" width="186" height="86" rx="12" fill="#E6F1FB" stroke="#185FA5"/>
+  <text class="big bluen" x="470" y="212">3,8 días</text>
+  <text class="lb" x="470" y="232">un mes · 1 nodo GPU</text>
+  <text class="lb" x="470" y="248">se paraleliza en N nodos</text>
+
+  <text class="lb" x="40" y="284">RTF medido: GPU 0,055× · CPU 0,096× (Whisper small int8) · calibración 1000 B/s (mp3 8 kbps)</text>
+</svg>

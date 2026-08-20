@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="330" viewBox="0 0 680 330" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="680" height="330" fill="#ffffff"/>
+  <style>
+    .t{font-size:14px;fill:#2C2C2A}.th{font-size:14px;font-weight:600;fill:#2C2C2A}
+    .ts{font-size:12px;fill:#5F5E5A}
+  </style>
+
+  <text class="ts" x="40" y="24">Tiempo de proceso por llamada larga (min) · Whisper small int8 · menor es mejor</text>
+
+  <rect x="360" y="34" width="14" height="14" rx="3" fill="#E6F1FB" stroke="#185FA5"/>
+  <text class="ts" x="380" y="45">CPU</text>
+  <rect x="430" y="34" width="14" height="14" rx="3" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="ts" x="450" y="45">GPU Arc</text>
+
+  <line x1="80" y1="270" x2="640" y2="270" stroke="#5F5E5A" stroke-width="1.5"/>
+
+  <rect x="92"  y="81"  width="34" height="189" rx="3" fill="#E6F1FB" stroke="#185FA5"/>
+  <rect x="134" y="170" width="34" height="100" rx="3" fill="#E1F5EE" stroke="#0F6E56"/>
+  <rect x="252" y="79"  width="34" height="191" rx="3" fill="#E6F1FB" stroke="#185FA5"/>
+  <rect x="294" y="170" width="34" height="100" rx="3" fill="#E1F5EE" stroke="#0F6E56"/>
+  <rect x="412" y="97"  width="34" height="173" rx="3" fill="#E6F1FB" stroke="#185FA5"/>
+  <rect x="454" y="156" width="34" height="114" rx="3" fill="#E1F5EE" stroke="#0F6E56"/>
+  <rect x="552" y="85"  width="34" height="185" rx="3" fill="#E6F1FB" stroke="#185FA5"/>
+  <rect x="594" y="165" width="34" height="105" rx="3" fill="#E1F5EE" stroke="#0F6E56"/>
+
+  <text class="ts" x="109" y="75"  text-anchor="middle">3,3</text>
+  <text class="ts" x="151" y="164" text-anchor="middle">1,8</text>
+  <text class="ts" x="269" y="73"  text-anchor="middle">3,3</text>
+  <text class="ts" x="311" y="164" text-anchor="middle">1,8</text>
+  <text class="ts" x="429" y="91"  text-anchor="middle">3,0</text>
+  <text class="ts" x="471" y="150" text-anchor="middle">2,0</text>
+  <text class="th" x="569" y="79"  text-anchor="middle">3,2</text>
+  <text class="th" x="611" y="159" text-anchor="middle">1,8</text>
+
+  <text class="t" x="130" y="288" text-anchor="middle">Ll. 36,8 min</text>
+  <text class="t" x="290" y="288" text-anchor="middle">Ll. 33,3 min</text>
+  <text class="t" x="450" y="288" text-anchor="middle">Ll. 31,0 min</text>
+  <text class="th" x="590" y="288" text-anchor="middle">Promedio</text>
+
+  <text class="ts" x="130" y="306" text-anchor="middle">RTF 0,090 / 0,048</text>
+  <text class="ts" x="290" y="306" text-anchor="middle">RTF 0,101 / 0,053</text>
+  <text class="ts" x="450" y="306" text-anchor="middle">RTF 0,098 / 0,065</text>
+  <text class="ts" x="590" y="306" text-anchor="middle">RTF 0,096 / 0,055</text>
+</svg>

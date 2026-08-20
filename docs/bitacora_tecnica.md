@@ -381,3 +381,96 @@ de despliegue/limitaciones. Prueba que el diseño es portable y cuantifica el co
 - *Salida esperada:* una tabla/figura análoga a la del speedup de Spark, pero para ASR, que
   **decide con evidencia dónde vive Whisper en producción**.
 
+---
+
+## Parte F — Fase 3: ejecución (2026-08-20, EN CURSO)
+
+### F.1 Bloque A — Muestra de audios (toca el servidor, hecho)
+
+- **Selección** (`src/processing/sample_select.py`, local, sin tocar el audio): 12 días
+  repartidos 2020→2025 (2/año; se evita 2018–2019 por CDR incompleto), cruce reusando
+  `link_calls`, filtro `en_muestra`. Muestra **estratificada por año = 500 llamadas**
+  (83–84/año). Peso estimado desde el índice (columna `bytes`) = **77,8 MB**.
+  `en_muestra`/día observado: 2020 (369/650), 2021 (835/618), 2022 (427/438),
+  2023 (319/1 737), 2024 (1 710/1 578), 2025 (1 801/1 389) — crecimiento del call center.
+- **Copia** (`scripts/copiar_muestra.py`, paramiko SFTP): **SOLO LECTURA por ruta exacta**
+  (sin escanear carpetas). **500/500 archivos, 0 fallos, 77,8 MB en 16,3 s** por LAN.
+  Impacto en Asterisk nulo (lectura puntual con prioridad de sistema). Salidas en
+  `data/muestra/` (gitignored): `manifest.tsv`, `paths.txt`, `audios/`.
+
+### F.2 Bloque B — Motor ASR sobre OpenVINO (validado)
+
+- **Decisión de motor:** `openvino-genai` (WhisperPipeline) en vez de faster-whisper, porque
+  faster-whisper (CTranslate2) **no usa la GPU Intel Arc**; OpenVINO GenAI sí, y permite
+  elegir `CPU`/`GPU`/`NPU`, lo que da un benchmark apples-to-apples. Modelo:
+  `OpenVINO/whisper-small-int8-ov` (multilingüe, int8) en `data/models/`.
+- **Sonda** (`whisper_worker/asr_probe.py`) sobre 1 audio real (49,3 s):
+
+  | Dispositivo | Carga | Transcripción | RTF (t_proc / dur) |
+  |---|---|---|---|
+  | CPU | 1,1 s | 3,9 s | **0,08×** |
+  | GPU Arc | 3,2 s | 2,1 s | **0,04×** |
+
+- **Hallazgos:** (1) la GPU Arc transcribe y es ~2× más rápida que la CPU en el cómputo;
+  (2) **ambas superan por mucho la meta del plan (< 3×)** — 12–25× más rápido que tiempo real;
+  (3) **la CPU también es muy rápida (0,08×)** → indicio fuerte de que el servidor HP sin GPU
+  podría hacer ASR en CPU de forma viable (a confirmar con el benchmark en CPU tipo servidor);
+  (4) **alucinación por repetición** detectada en un audio con tonos/silencio (texto degenera a
+  "Nuestros… Nuestros…") → **confirma la necesidad del paso anti-alucinación** del plan.
+
+### F.2b Benchmark ASR en llamadas LARGAS (GPU vs CPU)
+
+`whisper_worker/bench_asr.py` sobre las 3 llamadas más largas de la muestra local (30-36 min;
+la máxima del corpus en los 12 días fue 36,4 min — las de 40-60 min son raras). Figura:
+`docs/figuras/benchmark_asr_llamadas_largas.svg`.
+
+| Llamada | Audio | CPU (proc / RTF) | GPU Arc (proc / RTF) |
+|---|---|---|---|
+| 1 | 2 210 s (36,8 min) | 199,3 s / 0,090× | 105,7 s / 0,048× |
+| 2 | 1 995 s (33,3 min) | 200,7 s / 0,101× | 105,2 s / 0,053× |
+| 3 | 1 860 s (31,0 min) | 182,5 s / 0,098× | 120,0 s / 0,065× |
+| **Promedio** | 6 065 s | **582 s / 0,096×** | **331 s / 0,055×** |
+
+- **RTF estable** entre audio corto (49 s: 0,04-0,08×) y largo (33 min: 0,055-0,096×) → el
+  tiempo de proceso **escala linealmente con la duración**; el promedio es confiable (long-form
+  chunking sin degradación). Dato central para el jurado.
+- **Regla práctica:** llamada de ~35 min → **~1,8 min (GPU) / ~3,2 min (CPU)**; proyección a
+  45 min → ~2,5 min (GPU) / ~4,3 min (CPU).
+- **Throughput:** GPU ~18 h de llamadas por hora de cómputo (1÷0,055); CPU ~10 h/h. GPU ~1,75× CPU.
+- **Despliegue:** aun en CPU (0,096×) el servidor sin GPU es viable para streaming (una llamada
+  de 45 min en ~4,3 min aquí; en el Xeon del servidor, más lento, ~13-17 min, aún bajo tiempo
+  real). Para batch masivo conviene la GPU. Confirma cuantitativamente la Parte E.7.
+
+### F.2c Métricas de carga: streaming y reproceso total
+
+`src/processing/carga_streaming.py` (calibración bytes→segundos en la muestra local =
+**1000 B/s**, mp3 8 kbps; distribución de mayo 2025; totales del corpus desde el índice).
+RTF usados: GPU 0,055× / CPU 0,096×. Figura: `docs/figuras/carga_streaming_y_reproceso.svg`.
+
+**(A) Carga de streaming (mayo 2025, 153 533 grabaciones / 26 días):**
+- 5 905 grabaciones/día; por hora activa media 629 / **pico 1 555**.
+- **98,3 % cortas (<5 min)**, 0,9 % medias (5-10 min), **0,8 % largas (≥10 min, prom 18 min)**.
+- Largas: **45/día**, media 6/hora, **pico 20/hora**.
+- Capacidad 1 nodo (solo largas): GPU ~61/h, CPU ~35/h → holgura 3× (GPU) / 2× (CPU).
+- Carga total (todo): hora media GPU ~37 % / CPU ~65 %; **hora pico GPU ~91 % (justo), CPU se
+  sobrecarga brevemente** (la cola drena tras el pico).
+- **Veredicto:** un solo nodo de transcripción sostiene el streaming en tiempo real (cómodo en
+  GPU). Las llamadas largas, por ser pocas, nunca son el cuello de botella.
+
+**(B) Reproceso total del corpus (alcance 200-299/OUT):**
+- **7 061 447 grabaciones · 455,5 GB (= 424 GiB) · ~126 500 h de audio (~14 años)**.
+- 1 nodo **GPU ≈ 290 días** continuos; 1 nodo CPU ≈ 506 días. Un mes: ~3,8 días (GPU) / 6,6 (CPU).
+- **Implicación:** reprocesar todo en 1 nodo es inviable → justifica el enfoque de **muestra** +
+  **streaming incremental**; para histórico completo, paralelizar en N nodos (≈290/N días) o
+  filtrar a llamadas relevantes (las largas+medias, 1,7 % de las llamadas, son ~32 % del audio).
+
+### F.3 Pendiente de Bloque B (en orden)
+
+1. Completar `worker.py`: normalización (decodificación robusta de mp3) + **anti-alucinación**
+   (descartar segmentos con `no_speech_prob` alto y bucles de repetición) + metadatos.
+2. **Diarización** agente/cliente — requiere **token de Hugging Face del tesista** + aceptar
+   términos de `pyannote` (modelo con permiso). Bloqueante externo.
+3. **Anonimización** (Presidio + spaCy ES: cédula módulo 10, tarjeta Luhn, teléfonos, nombres).
+4. Asset `silver_transcriptions` (Dagster) integrado por Kafka + validación 0 fugas PII.
+5. **Benchmark formal GPU vs CPU** sobre N audios (protocolo Parte E.7).
+

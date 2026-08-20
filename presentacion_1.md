@@ -6,6 +6,18 @@ center de ventas (Corporación Marketing Vip S.A., aliada de Diners Club).
 batch sobre datos reales de producción** (Fases 1, 0, 2, 3 y 4). Me quedan pendientes el
 disparador de *streaming* (Fase 5) y el tablero (Fase 7).
 
+> **Términos clave (para leer este documento):**
+> - **RTF** (*Real-Time Factor*, factor de tiempo real) = tiempo de proceso ÷ duración del audio.
+>   Menor que 1 significa **más rápido que el tiempo real** (ej. 0,05× = 20× más rápido; un audio
+>   de 1 min se transcribe en 3 s).
+> - **PII** (*Personally Identifiable Information*) = **datos personales identificables**: cédula,
+>   tarjeta, teléfono, nombres. "0 fugas de PII" = ninguno de esos datos quedó expuesto.
+> - **ASR** = reconocimiento automático de voz (convierte audio → texto).
+> - **CDR** (*Call Detail Record*) = registro de metadatos de cada llamada (fecha, extensión, etc.).
+> - **Diarización** = separar automáticamente **quién habla** (asesor vs. cliente).
+> - **Medallion** = organización de datos en zonas de calidad creciente: **Bronce** (crudo) →
+>   **Plata** (limpio/anonimizado) → **Oro** (evaluado).
+
 ---
 
 ## 1. Cómo procedí (metodología y ruta)
@@ -110,6 +122,23 @@ módulos y el bus Kafka. El batch (ya implementado) se dispara por fechas; para 
 (Fase 5) solo me falta agregar un **sensor** que detecte la llamada nueva — el worker ya funciona
 como consumidor de cola.
 
+### 4.1 Gobernanza de datos (transversal)
+
+La gobernanza no es una fase aparte: la apliqué **transversalmente en cada zona** (ver la franja
+inferior del gráfico integral). Manejo **dos tipos** complementarios:
+
+| Dónde (zona) | Qué gobierno y cómo |
+|---|---|
+| **Bronce** | **Calidad**: leo la fuente en *solo lectura* (no altero producción), descarto CDR corruptos (2,25 %) y valido esquema |
+| **Plata** | **Privacidad (PII)**: la anonimización es la *frontera* — el audio y los datos personales **nunca salen de la LAN**; solo texto anonimizado va a la nube |
+| **Oro / Servido** | **Trazabilidad**: cada evaluación guarda versión de rúbrica + modelo + fecha (reproducible y auditable) |
+| **Transversal** | **Linaje**: Dagster registra el linaje de cada activo y versiona el rango temporal procesado |
+| **Cumplimiento (regulatorio)** | La **rúbrica versionada** (`rubrica_v1`) y las **palabras prohibidas** son gobernanza de *cumplimiento* — ver §5.5 |
+
+> Nota: la **gobernanza de datos** (calidad, privacidad, linaje) es distinta de la **gobernanza de
+> cumplimiento** (rúbrica y palabras prohibidas, que responden a la normativa de la
+> Superintendencia). El sistema cubre ambas.
+
 ---
 
 ## 5. Resultados con datos reales
@@ -145,6 +174,26 @@ Desarrollé un análisis híbrido (reglas + IA) contra la rúbrica de la empresa
 el sistema detectó automáticamente **"GARANTIZO"** (palabra prohibida CRÍTICA → riesgo de multa de
 la Superintendencia) en una llamada real — algo que la auditoría manual no alcanza a revisar.
 
+**¿Qué son los códigos B01, B13, B16…?** Son las **palabras/frases prohibidas** de la rúbrica de
+auditoría de la empresa (`rubrica_v1`). Cada código identifica un término que el asesor no debe
+decir, con su severidad. **Detectarlos es gobernanza de cumplimiento** (evita multas y reclamos al
+banco). Referencia de los que aparecen en los ejemplos:
+
+| Código | Término prohibido | Severidad | Por qué es riesgo |
+|---|---|---|---|
+| **B01** | "Garantizo" | **CRÍTICA** | Promete algo que no puede garantizar (aprobación depende del banco) |
+| **B06** | "Sin intereses" (sin aclarar "del banco") | **CRÍTICA** | Oculta que aplica seguro de desgravamen |
+| **B07** | "Cuotas fijas" | **CRÍTICA** | La cuota varía según el saldo/seguro |
+| **B08** | "Crédito inmediato / inmediato" | **CRÍTICA** | Depende de la fecha de corte de la tarjeta |
+| **B11** | "Gratis / sin costo" | MAYOR | Existen impuestos/tasas/seguro |
+| **B12** | "Descuento" (siendo cashback/puntos) | MAYOR | Induce a error sobre el beneficio |
+| **B13** | "Ilimitado / para siempre" | MAYOR | Tiene condiciones (letra chica) |
+| **B16** | "Sorteo / regalo / bono" | MAYOR | Sin registro/condiciones = publicidad engañosa |
+
+> La rúbrica completa (Grupo A = adherencia al guion, Grupo B = palabras prohibidas, Grupo C =
+> omisiones, con severidades y regla dura `venta_valida=0`) está en
+> `proyecto/parametros_calidad_empresa.md`.
+
 ### 5.5 Ejemplos reales que procesé (3 llamadas, con tiempos y diarización)
 
 Procesé 3 llamadas largas de venta de extremo a extremo (transcripción → diarización →
@@ -156,8 +205,13 @@ anonimización → evaluación):
 | **ag. 204** | 33 min | 105 s | 1 711 s (~28 min) | 83 / 2 | **B01 GARANTIZO**, B08, B13, B16 | **alto** | neutral → escéptico → negativo |
 | ag. 217 | 30 min | 120 s | — | — | B06, B12, B13, B16 | alto | neutral → dudoso → neutral |
 
-> **Nota de rendimiento:** la diarización en CPU me tarda ~30 min por llamada larga (~15× el ASR
-> en GPU). Es mi argumento cuantitativo directo para la GPU NVIDIA que propongo (§3.2).
+> **¿Por qué la diarización corrió en CPU y no en GPU?** La transcripción (Whisper) usa
+> **OpenVINO**, el runtime de Intel, que **sí** aprovecha mi GPU **Intel Arc** → por eso el ASR
+> vuela (RTF 0,05×). Pero la diarización (pyannote) está construida sobre **PyTorch**, que en la
+> práctica solo acelera en **GPU NVIDIA (CUDA)**; la Intel Arc no es compatible con PyTorch en
+> Windows, así que la diarización **cayó a CPU** y por eso tarda ~30 min por llamada larga (~15×
+> el ASR en GPU). Con la **GPU NVIDIA** que propongo (§3.2), pyannote correría en CUDA y la
+> diarización se aceleraría ~10–15×. Es mi argumento cuantitativo directo para la inversión.
 
 **Salida real (diarizada + anonimizada), extracto del ejemplo 1:**
 

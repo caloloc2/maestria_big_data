@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="860" height="850" viewBox="0 0 860 850" font-family="Segoe UI, Arial, sans-serif">
-  <rect x="0" y="0" width="860" height="850" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="952" viewBox="0 0 860 952" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="860" height="952" fill="#ffffff"/>
   <style>
     .t{font-size:13px;fill:#2C2C2A}.th{font-size:13px;font-weight:600;fill:#2C2C2A}
     .ts{font-size:11px;fill:#5F5E5A}.zone{font-size:13px;font-weight:600}
@@ -112,4 +112,20 @@
   <text class="ts" x="655" y="160" fill="#5F5E5A">Disparo STREAMING:</text>
   <text class="ts" x="655" y="176">sensor de llamada nueva</text>
   <text class="ts" x="655" y="192">(Fase 5, próximo)</text>
+
+  <rect x="12" y="846" width="836" height="92" rx="10" fill="#EEEDFE" stroke="#534AB7"/>
+  <text class="th purt" x="24" y="868">GOBERNANZA DE DATOS (transversal — orquestada por Dagster: linaje y reproducibilidad)</text>
+  <line x1="24" y1="876" x2="836" y2="876" stroke="#CECBF6"/>
+  <text class="th purt" x="24" y="896">BRONCE</text>
+  <text class="ts" x="24" y="911">Solo lectura en la fuente ·</text>
+  <text class="ts" x="24" y="925">descarta corruptos · valida esquema</text>
+  <text class="th purt" x="228" y="896">PLATA</text>
+  <text class="ts" x="228" y="911">Anonimización PII (frontera) ·</text>
+  <text class="ts" x="228" y="925">audio y PII no salen de la LAN</text>
+  <text class="th purt" x="452" y="896">ORO / SERVIDO</text>
+  <text class="ts" x="452" y="911">Trazabilidad por evaluación</text>
+  <text class="ts" x="452" y="925">(versión rúbrica + modelo + fecha)</text>
+  <text class="th purt" x="676" y="896">CUMPLIMIENTO</text>
+  <text class="ts" x="676" y="911">rúbrica versionada (rubrica_v1)</text>
+  <text class="ts" x="676" y="925">+ palabras prohibidas</text>
 </svg>

@@ -1,10 +1,17 @@
-# Imagen del orquestador Dagster (webserver + daemon comparten esta imagen).
-# La construye el servicio dagster_webserver en docker-compose.yml.
-FROM python:3.11-slim
+# Imagen del orquestador Dagster (webserver + daemon) + procesamiento batch (Spark).
+# Base bookworm (Debian 12): trae openjdk-17, la versión de Java que soporta PySpark 3.5.
+FROM python:3.11-slim-bookworm
 
 ENV DAGSTER_HOME=/opt/dagster/dagster_home \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/opt/dagster/app
+    PYTHONPATH=/opt/dagster/app \
+    JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 \
+    PATH=/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH
+
+# Java 17 (requerido por PySpark) + procps para diagnósticos
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openjdk-17-jre-headless procps \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p $DAGSTER_HOME /opt/dagster/app
 
@@ -15,5 +22,4 @@ RUN pip install --no-cache-dir -r /tmp/req.txt
 COPY infra/dagster/dagster.yaml $DAGSTER_HOME/dagster.yaml
 
 WORKDIR /opt/dagster/app
-# El código (src/) y el workspace.yaml se montan como volúmenes en dev,
-# para editar sin reconstruir la imagen.
+# El código (src/), el workspace.yaml, el .env y data/ se montan como volúmenes en dev.

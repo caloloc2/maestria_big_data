@@ -131,6 +131,67 @@ Construida **incremental** (validar/corregir en cada slice). Todo local en la la
 
 ---
 
+## Parte D — Fase 2: Preparación batch (Spark / PySpark)
+
+Primer pipeline que **procesa datos reales** por rango de fechas, llenando las zonas
+Bronce y Plata. Todo local; el CDR se lee **SOLO LECTURA** por VPN.
+
+### D.1 Entorno
+
+- Imagen Dagster extendida: **Java 17 (OpenJDK) + PySpark 3.5.3** + `pandas`, `pyarrow`,
+  `pymysql`, `SQLAlchemy`, `psycopg2`, `pandera`. Base `python:3.11-slim-bookworm`.
+- Spark en **modo local[N]** (sin clúster aparte). El nº de núcleos es parametrizable
+  para medir speedup.
+- Montajes nuevos en los contenedores Dagster: `.env` (credenciales, ro) y `data/` (salidas).
+
+### D.2 Código (`src/processing/` + `src/definitions.py`)
+
+| Módulo | Rol |
+|---|---|
+| `config.py` | Motores SQLAlchemy: CDR (solo lectura) y capa servida (PostgreSQL); rutas |
+| `cdr.py` | `read_cdr(desde, hasta)` — SELECT del CDR, descarta corruptos; **nunca escribe** |
+| `audio_index.py` | `build_audio_scope(spark)` — lee el índice tsv.gz, filtra **200–299/OUT**, parsea (ext, teléfono, ts) |
+| `linkage.py` | `link_calls(cdr, audio)` — llave `(ext∈channel/dstchannel + dst=teléfono + |Δt|≤180 s)`, vecino más cercano |
+| `serving.py` | Esquema `servido.llamadas` + escritura idempotente por día |
+| `spark_session.py` | SparkSession local[N] (Arrow habilitado) |
+| `validate_month.py` | Enlace sobre un mes + medición de speedup |
+| `definitions.py` | Activos `bronze_cdr`, `bronze_audio_index`, `silver_calls` (particionados por día) |
+
+**Zonas:** Bronce = `data/bronze/cdr/date=YYYY-MM-DD/` (Parquet por día) + `data/bronze/audio_index/`
+(Parquet particionado por fecha, 7,06 M filas del alcance). Plata = `data/silver/calls/date=…/`
++ tabla `servido.llamadas` en PostgreSQL (una fila = una grabación emparejada).
+
+### D.3 Validación (mayo 2025)
+
+- `bronze_audio_index`: **7 061 447** grabaciones en alcance (= exactamente el alcance de la Fase 1).
+- **Cobertura del cruce = 100 %**: día 2025-05-14 → 6 791/6 791 (0 huérfanas); **mes completo
+  2025-05 → 153 533/153 533** (0 huérfanas). Muestra analítica (`en_muestra`): 28 844.
+- **Reconciliación / calidad** (24 724 filas de 4 días): 0 nulos en `call_id`/`audio_path`,
+  0 agentes fuera de 200–299, `diff_seg ∈ [0, 180]` (media 0 s, máx 1 s → emparejamiento casi
+  exacto), 0 inconsistencias de muestra, **24 724 audios únicos = 24 724 filas (1:1 perfecto)**.
+- Disposition de lo emparejado: NO ANSWER 64 %, ANSWERED 30 %, BUSY/FAILED resto (coherente
+  con marcador predictivo).
+- **Speedup Spark** (mismo job, mes completo): 1 núcleo 390,7 s · 2 núcleos 105,4 s ·
+  4 núcleos **56,9 s** (≈ 6,9× con 4 núcleos; el salto super-lineal 1→2 refleja menos
+  *spilling*/GC con más paralelismo). Evidencia de escalabilidad para el tribunal.
+
+### D.4 Correcciones aplicadas (para documentación)
+
+1. El `.env` (heredado de la Fase 1) traía `AUDIO_INDEX=/work/data/...`, ruta del contenedor
+   de diagnóstico → se calcula la ruta **relativa a `DATA_DIR`** e ignora ese valor.
+2. `openjdk-17-jre-headless` no está en Debian trixie (base de `python:3.11-slim`) → se fija la
+   base **`python:3.11-slim-bookworm`** (Debian 12), con Java 17 que soporta PySpark 3.5.
+3. Spark 3.5 no lee timestamps Parquet en **nanosegundos** (pandas los escribe así) → se escribe
+   `bronze_cdr` con `to_parquet(coerce_timestamps="us", allow_truncated_timestamps=True)`.
+
+### D.5 Reglas respetadas
+
+- **CDR: solo `SELECT`** (lectura). Nunca se modificó la tabla ni la fuente.
+- **Grabaciones/Asterisk: intactas.** Para el audio solo se usó el índice `audio_index.tsv.gz`
+  ya descargado en la Fase 1; no se accedió al servidor de grabaciones.
+
+---
+
 ## Parte C — Cómo fluye el pipeline: caminos batch y streaming
 
 Arquitectura **híbrida (estilo Lambda)**: dos caminos que **comparten los mismos módulos**

@@ -91,6 +91,8 @@ services:
     volumes:
       - ../src:/opt/dagster/app/src
       - ../infra/dagster/workspace.yaml:/opt/dagster/app/workspace.yaml
+      - ../.env:/opt/dagster/app/.env:ro
+      - ../data:/opt/dagster/app/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,6 +109,8 @@ services:
     volumes:
       - ../src:/opt/dagster/app/src
       - ../infra/dagster/workspace.yaml:/opt/dagster/app/workspace.yaml
+      - ../.env:/opt/dagster/app/.env:ro
+      - ../data:/opt/dagster/app/data
     depends_on:
       postgres:
         condition: service_healthy

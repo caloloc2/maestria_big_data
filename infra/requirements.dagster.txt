@@ -1,4 +1,14 @@
-# Imagen Dagster — Fase 0 (orquestador + UI). Versiones de la serie 1.9.
+# Imagen Dagster — orquestador + UI + procesamiento batch (Fase 2).
 dagster==1.9.*
 dagster-webserver==1.9.*
 dagster-postgres==0.25.*
+
+# Procesamiento batch (Fase 2): Spark + conectores + calidad de datos
+pyspark==3.5.3
+pandas==2.2.3
+pyarrow==17.0.0
+pymysql==1.1.1          # lectura del CDR (SOLO LECTURA)
+SQLAlchemy==2.0.35
+psycopg2-binary==2.9.12 # escritura a la capa servida PostgreSQL
+pandera==0.20.4         # validación de esquemas (gobernanza)
+python-dotenv==1.0.1

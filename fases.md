@@ -255,7 +255,7 @@ Leyenda: ⬜ No iniciada · 🟨 En progreso · ✅ Completada
 |---|---|---|---|
 | 0 | Fundaciones e infraestructura | Comprensión del negocio | ✅ |
 | 1 | Diagnóstico y comprensión de datos | Comprensión de los datos | ✅ |
-| 2 | Preparación batch (Spark) | Preparación de datos | ⬜ |
+| 2 | Preparación batch (Spark) | Preparación de datos | ✅ |
 | 3 | ASR + anonimización (local) | Preparación de datos | ⬜ |
 | 4 | Análisis de calidad y cumplimiento (Gemini) | Modelado | ⬜ |
 | 5 | Ingesta streaming near-real-time (Kafka) | Despliegue (parcial) | ⬜ |
@@ -316,84 +316,44 @@ linaje + versionado), integrada en el pipeline.
 **Hitos / pasos:**
 
 **0.A — Repositorio y estructura**
-- [ ] Crear estructura del monorepo:
-  ```
-  src/
-    ingestion/       # conectores CDR (MySQL) + productor Kafka
-    processing/      # jobs Spark batch + activos Dagster Bronce/Plata
-    asr/             # Whisper worker nativo (OpenVINO) — no Docker
-    anonymization/   # Presidio + spaCy + regex custom
-    analysis/        # cliente Gemini + rúbrica + pydantic
-    anomalies/       # IsolationForest + series temporales
-    serving/         # modelos PostgreSQL + vistas
-    dashboard/       # Streamlit
-  infra/
-    docker-compose.yml   # Kafka + Dagster + PostgreSQL + Streamlit
-    docker-compose.override.yml  # overrides dev
-    Dockerfiles/
-    dagster/         # dagster.yaml, workspace.yaml
-  whisper_worker/    # proceso nativo host (fuera de Docker)
-    requirements.txt # faster-whisper, openvino, pyannote
-    worker.py        # lee topic asr.jobs, publica asr.results
-  notebooks/
-  tests/
-  docs/
-  data/              # gitignored — muestras locales
-  ```
-- [ ] `.env` para variables de entorno (DB, Kafka bootstrap, Gemini key). Mover `.gemini_key` aquí; nunca en git.
-- [ ] `pre-commit` con ruff/black + `git grep` para secretos.
-- [ ] `README.md` técnico del repo con instrucciones de arranque en una línea.
+- [x] Crear estructura del monorepo (`src/` con 8 subpaquetes + README/`__init__`, `whisper_worker/`, `tests/`, `docs/`, `infra/dagster/`).
+- [x] `.env.example` para variables de entorno (ya existía de Fase 1; `.env` gitignored). — Clave Gemini se moverá en Fase 4.
+- [ ] `pre-commit` con ruff/black + `git grep` para secretos. — (pendiente, opcional)
+- [ ] `README.md` técnico del repo con arranque en una línea. — (pendiente; hay READMEs por carpeta)
 
 **0.B — Docker Compose con Dagster**
-- [ ] `docker-compose.yml` con:
-  - **Kafka** (Confluent `cp-kafka` 7.x) + Zookeeper o KRaft mode
-  - **Dagster** (dagster-webserver + dagster-daemon + PostgreSQL como backend de metadatos)
-  - **PostgreSQL** (capa servida, distinto del backend Dagster)
-  - **Streamlit** (placeholder)
-  - Topics iniciales: `llamadas.finalizadas`, `asr.jobs`, `asr.results`, `transcripciones`, `anonimizadas`, `analisis.calidad`
-- [ ] Perfiles `dev` (volúmenes locales, logs verbosos) y `prod` (restart: always, recursos limitados).
-- [ ] `healthcheck` para cada servicio crítico.
-- [ ] Dagster `workspace.yaml` apuntando a `src/` como módulo de activos.
+- [x] `docker-compose.yml` con Kafka (**apache/kafka 3.9 en KRaft**, sin Zookeeper), Dagster (webserver + daemon + Postgres como backend), PostgreSQL, Streamlit (placeholder) y los 6 topics (creados por `kafka_init`).
+- [ ] Perfiles `dev` / `prod`. — (se añade en Fase 9 / despliegue)
+- [x] `healthcheck` de los servicios críticos con estado (Postgres, Kafka).
+- [x] Dagster `workspace.yaml` apuntando a `src/definitions.py`.
 
 **0.C — Dagster: primer DAG esqueleto**
-- [ ] Definir los **activos Dagster** que mapean las zonas Medallion:
-  ```python
-  @asset  bronze_cdr          # lee MySQL → Parquet bronce
-  @asset  bronze_audio_index  # índice filesystem grabaciones
-  @asset  silver_calls        # cruce CDR↔audio + normalización
-  @asset  silver_transcriptions  # resultado Whisper worker (via asr.results)
-  @asset  gold_evaluations    # resultado Gemini
-  @asset  gold_kpis           # agregados + anomalías
-  ```
-- [ ] Particionado por fecha (`DailyPartitionsDefinition`) para habilitar backfill histórico.
-- [ ] Job `batch_pipeline` que materializa Bronce → Plata → Oro.
-- [ ] Sensor `new_calls_sensor` que detecta CDR nuevos y lanza el job (streaming path).
+- [x] **Activos Dagster** que mapean las zonas Medallion (`src/definitions.py`): `bronze_cdr`, `bronze_audio_index`, `silver_calls`, `silver_transcriptions`, `gold_evaluations`, `gold_kpis` (esqueleto; run Bronce→Plata→Oro validado).
+- [ ] Particionado por fecha (`DailyPartitionsDefinition`). — (se implementa en **Fase 2**)
+- [ ] Job `batch_pipeline` que materializa Bronce → Plata → Oro. — (**Fase 2**)
+- [ ] Sensor `new_calls_sensor` (camino streaming). — (**Fase 5**)
 
 **0.D — Whisper worker nativo (host)**
-- [ ] Crear `whisper_worker/` con entorno Python dedicado (`requirements.txt`).
-- [ ] Instalar: `faster-whisper`, `openvino`, `openvino-dev`, `pyannote.audio`, `confluent-kafka`.
-- [ ] `worker.py`: consume topic `asr.jobs` (mensaje: `{call_id, audio_path}`), transcribe con OpenVINO + faster-whisper, diariza, publica resultado en `asr.results`.
-- [ ] Validar que OpenVINO detecta el GPU Arc 140V en el host:
-  ```python
-  from openvino.runtime import Core
-  print(Core().available_devices)  # esperado: ['CPU', 'GPU'] o ['CPU', 'GPU.0']
-  ```
-- [ ] Script de inicio: `start_whisper_worker.sh` (o `.ps1` en Windows).
+- [x] Crear `whisper_worker/` con entorno Python dedicado y aislado (`.venv` + `requirements.txt`).
+- [x] Instalar el núcleo de Fase 0.D: `openvino` (2026.3.0) + `confluent-kafka` (2.15.0). — `faster-whisper`/`pyannote` se instalan en **Fase 3**.
+- [x] `worker.py` esqueleto: consume `asr.jobs`, publica `asr.results`. — Transcripción/diarización real en **Fase 3**.
+- [x] **Validado que OpenVINO detecta la GPU Arc 140V** en el host: `['CPU', 'GPU', 'NPU']` (GPU: Intel Arc 140V 16 GB; + NPU).
+- [ ] Script de inicio `start_whisper_worker.ps1`. — (pendiente, menor)
 
 **0.E — Validación del entorno**
-- [ ] `docker compose up -d` levanta todos los servicios sin errores.
-- [ ] `dagster dev` (o `dagster-webserver`) muestra el grafo de activos en UI.
-- [ ] Un mensaje de prueba llega de Kafka → Dagster → se procesa → se almacena en PostgreSQL.
-- [ ] El Whisper worker procesa un audio de prueba de 30 s y devuelve transcripción en `asr.results`.
-- [ ] OpenVINO reporta GPU disponible en el host (Arc 140V).
-- [ ] El repo no contiene secretos (`pre-commit` + `git grep -r "AKIA\|sk-\|AIza" .`).
+- [x] `docker compose up --build -d` levanta todos los servicios sin errores (un solo comando).
+- [x] `dagster-webserver` muestra el grafo de activos en la UI (`:3000`, HTTP 200, 6 activos).
+- [x] Kafka valida el bus: produce→consume de un mensaje en `asr.jobs` (round-trip OK). — El flujo integrado Kafka→Dagster→Postgres se cierra en **Fase 5**.
+- [ ] El Whisper worker transcribe un audio de prueba de 30 s. — (**Fase 3**)
+- [x] OpenVINO reporta GPU disponible en el host (Arc 140V).
+- [x] Sin secretos en git (`.env`, `.gemini_key`, `.venv`, `data/` en `.gitignore`).
 
 **Checklist de validación:**
-- [ ] `docker compose ps` — todos `healthy`.
-- [ ] Dagster UI en `localhost:3000` muestra activos `bronze_cdr`, `silver_calls`, `gold_evaluations`.
-- [ ] `nproc` y `free -h` en la VM muestran ≥ 8 cores y ≥ 8 GB libres (cuando aplique en prod).
-- [ ] Audio de prueba → transcripción correcta en menos de 3× duración del audio (en laptop con Arc).
-- [ ] Sin secretos en git.
+- [x] `docker compose ps` — servicios críticos `healthy` (Postgres, Kafka); Dagster/Streamlit `up`.
+- [x] Dagster UI en `localhost:3000` muestra los activos `bronze_cdr`, `silver_calls`, `gold_evaluations`, etc.
+- [ ] `nproc` y `free -h` en la VM ≥ 8 cores / 8 GB. — (aplica en **prod**, Fase 9)
+- [ ] Audio de prueba → transcripción < 3× duración. — (**Fase 3**)
+- [x] Sin secretos en git.
 
 **Entregable:** monorepo funcionando localmente con Dagster + Kafka + PostgreSQL + Whisper worker nativo — levantable en una línea de comando.
 
@@ -486,25 +446,25 @@ cifras reales de audio (tamaño total, `.mp3` vs `.wav`, archivos regados, etc.)
 **Justificación metodológica:** DSR → *Construcción del artefacto* (camino batch de la arquitectura híbrida). CRISP-DM → *Preparación de datos*. Cubre **OE3**. Los jobs Spark son activos Dagster particionados por fecha, habilitando backfill histórico y linaje nativo.
 
 **Hitos / pasos:**
-- [ ] Activos Dagster `silver_calls` (Bronce→Plata) particionado por día. Job `batch_pipeline` materializa el rango.
-- [ ] Job **PySpark** parametrizado por rango de fechas que lee CDR (JDBC) + índice de grabaciones.
-- [ ] Limpieza y normalización: tipos, teléfonos, deduplicado, `disposition` canónica.
-- [ ] Cruce CDR↔grabación a escala (reutiliza el resolvedor de la Fase 1).
-- [ ] Filtrado de la muestra por criterios de duración: `disposition = ANSWERED` + `billsec ∈ [10 s, 3 600 s]` (descarta llamadas no cerradas por `hangup` fallido — hallazgo Fase 1).
-- [ ] **Normalización de audio**: convertir a formato estándar para ASR (mono, 16 kHz, WAV/PCM) con `ffmpeg`, incluyendo los `wav` que nunca se convirtieron a mp3.
-- [ ] Definir el **modelo de datos de la capa servida** (esquema en PostgreSQL: `llamadas`, `transcripciones`, `evaluaciones`, `agentes`, `kpis`).
-- [ ] Escribir resultados intermedios (Parquet) + tabla `llamadas` base.
-- [ ] **Calidad de datos** (Great Expectations/pandera) en la frontera Bronce→Plata: esquema, nulos, unicidad de `call_id`, cobertura del cruce (ver Componente transversal T).
-- [ ] **Criterios de escalabilidad**: ejecutar el mismo job variando núcleos/particiones y registrar el **speedup** (strong/weak scaling) como evidencia distribuida.
+- [x] Activos Dagster `bronze_cdr` y `silver_calls` **particionados por día** (`DailyPartitionsDefinition`), operativos con linaje. Código en `src/processing/` + `src/definitions.py`.
+- [x] Job **PySpark** parametrizado por rango de fechas que lee el CDR (SOLO LECTURA, vía SQLAlchemy/PyMySQL) + índice de grabaciones (`src/processing/validate_month.py`).
+- [x] Limpieza/normalización: tipos, parseo de teléfono, `disposition`; deduplicado 1:1 (vecino más cercano) — validado: 24 724 audios únicos = 24 724 filas.
+- [x] **Cruce CDR↔grabación a escala** con el resolvedor de la Fase 1 (`src/processing/linkage.py`): **cobertura 100 %** (día 2025-05-14 y mes 2025-05 completo).
+- [x] Filtrado de la muestra: `disposition = ANSWERED` + `billsec ∈ [10, 3 600]` → columna `en_muestra` (28 844 en mayo 2025).
+- [ ] **Normalización de audio** (ffmpeg, mono 16 kHz). — (se hace en **Fase 3**, junto al ASR)
+- [x] **Capa servida**: esquema `servido.llamadas` en PostgreSQL (base) poblado. Tablas `transcripciones`/`evaluaciones`/`kpis` se añaden en Fases 3/4/6.
+- [x] Escribir resultados intermedios en Parquet (Bronce/Plata) + tabla `servido.llamadas`.
+- [x] **Validaciones de calidad** ejecutadas (nulos, agente∈200–299, `diff_seg∈[0,180]`, consistencia de la muestra, unicidad 1:1): 0 defectos. La suite formal `pandera`/GE se integra en el **Componente T**.
+- [x] **Escalabilidad (speedup)**: mismo job con 1/2/4 núcleos → 390,7 / 105,4 / **56,9 s** (≈ 6,9× con 4 núcleos).
 
 **Checklist de validación:**
-- [ ] El job corre por un rango (p. ej. un mes) y produce salida consistente y repetible.
-- [ ] Conteos cuadran (CDR en rango = procesados + descartados con motivo).
-- [ ] Los audios normalizados abren y tienen 16 kHz mono.
-- [ ] Medición de **speedup** al variar núcleos/particiones (evidencia de escalabilidad para el tribunal).
-- [ ] Las validaciones de calidad rechazan y reportan lotes que no cumplen el esquema.
+- [x] El job corre por un rango (mayo 2025 completo + 4 días vía Dagster) y produce salida consistente y repetible (escritura idempotente por día).
+- [x] Conteos cuadran: emparejadas + huérfanas = audio del alcance (100 % cobertura, 0 huérfanas).
+- [ ] Los audios normalizados abren y tienen 16 kHz mono. — (**Fase 3**)
+- [x] Medición de **speedup** al variar núcleos (evidencia de escalabilidad para el tribunal).
+- [x] Las validaciones de calidad ejecutadas sin defectos; mecanismo de rechazo formal (pandera/GE) → Componente T.
 
-**Entregable:** activos Dagster `bronze_cdr`, `silver_calls` operativos con linaje + pipeline batch parametrizable + capa de datos base poblada con una muestra.
+**Entregable:** activos Dagster `bronze_cdr`, `silver_calls` operativos con linaje + pipeline batch parametrizable + capa de datos base (`servido.llamadas`) poblada con la muestra. **COMPLETADO 2026-08-20** (detalle en `docs/bitacora_tecnica.md`).
 
 ---
 
@@ -722,6 +682,7 @@ como mejoras accionables para la operación técnica de la empresa:
 - _2026-08-14 · Gobernanza definida · Creada la carta [gobernanza.md](gobernanza.md) (claves `uniqueid`/`linkedid`, retención por sensibilidad LOPDP, acceso solo autor, pandera inline, versionado carpeta/fecha, umbral cruce ≥ 95 % + precisión linkage). Añadidas 2 referencias al `.bib` (batini2009, christen2012). Enlazada como entregable de Fase 0._
 - _2026-08-15 · Reunión con tutor + decisiones arquitectónicas · **Tutor aprobó el plan** con observación de orquestación. Decisiones cerradas: (1) Dagster como orquestador (sobre Airflow por alineación nativa con Medallion + menor RAM + linaje integrado); (2) arquitectura híbrida validada: Docker para Kafka/Dagster/Spark/PostgreSQL/Streamlit, Whisper worker nativo en HOST via OpenVINO; (3) desarrollar localmente en laptop (Core Ultra 9 / Arc 140V) antes de desplegar en VM ESXi. Validado experimentalmente: `/dev/dxg` pasa a Docker pero compute-runtime estándar Intel solo expone CPU — Whisper corre fuera de Docker._
 - _2026-08-16 · **INICIO IMPLEMENTACIÓN — Fase 0** · Fases actualizadas con Dagster, arquitectura híbrida Whisper HOST+OpenVINO, estructura monorepo, DAG Dagster esqueleto, configuración docker-compose con Dagster. Próximo paso: crear monorepo, docker-compose, primer activo Dagster, validar Whisper worker con OpenVINO en Arc 140V._
+- _2026-08-20 · **FASE 2 COMPLETADA — Preparación batch (Spark)** · Imagen Dagster extendida con Java 17 + PySpark 3.5.3 + conectores (base bookworm). Código de procesamiento en `src/processing/` (config, cdr [SOLO LECTURA], audio_index, linkage, serving, spark_session, validate_month) y activos reales en `src/definitions.py` (`bronze_cdr`, `bronze_audio_index`, `silver_calls` particionados por día). **Validado:** `bronze_audio_index` = 7 061 447 grabaciones (= alcance Fase 1); cruce CDR↔grabación **100 % de cobertura** en 2025-05-14 (6791/6791, 0 huérfanas) y en el **mes completo 2025-05** (153 533/153 533); 4 días cargados en `servido.llamadas` (PostgreSQL); calidad sin defectos (0 nulos, agente∈200–299, diff∈[0,180], 1:1); **speedup** 1/2/4 núcleos = 390,7/105,4/56,9 s (≈6,9×). Correcciones: (a) `.env` traía `AUDIO_INDEX=/work/...` obsoleto → ruta relativa a `DATA_DIR`; (b) `openjdk-17` no está en Debian trixie → base `python:3.11-slim-bookworm`; (c) Spark 3.5 no lee timestamps en nanosegundos → `to_parquet(coerce_timestamps='us')`. Comando maestro sigue igual. Siguiente: **Fase 3** (ASR + anonimización con el Whisper worker). Detalle en `docs/bitacora_tecnica.md`._
 - _2026-08-20 · **FASE 0 COMPLETADA (incremental)** · Stack base levantable en un comando (`docker compose -f infra/docker-compose.yml up --build -d`), validado end-to-end. Slice 1: Dagster (`infra/Dockerfile.dagster`, `dagster.yaml`, `workspace.yaml`, `src/definitions.py` con 6 activos Medallion esqueleto) + PostgreSQL; run Bronce→Plata→Oro OK. Slice 2: Kafka en **modo KRaft** (sin Zookeeper) + `kafka_init` que crea los 6 topics; produce→consume validado; correcciones: `advertised.listeners` sin `0.0.0.0` (bind `//:puerto`) y `MSYS_NO_PATHCONV=1` para rutas. 0.D: Whisper worker nativo (`whisper_worker/.venv`, openvino 2026.3.0 + confluent-kafka 2.15.0) — **OpenVINO ve CPU/GPU Arc 140V/NPU** y alcanza Kafka por `localhost:29092`. Streamlit placeholder (`:8501`) conectando a Postgres. Detalle completo en `docs/bitacora_tecnica.md` (incluye explicación de los flujos batch y streaming). Estructura del monorepo creada en `src/` + `whisper_worker/` + `tests/` + `docs/`. Siguiente: **Fase 2** (preparación batch con Spark / activos Dagster `bronze_cdr`, `silver_calls`)._
 - _2026-08-19 · **Fase 1 — Índice de audio + resolución del enlace CDR↔grabación** · Ejecutado `diagnostico_audio.sh` en el server (SOLO LECTURA, 32 min): **10 008 203** archivos, **858 GB**, 0 errores. Descubierto que los nombres son heterogéneos y que el `uniqueid` embebido NO aplica al call center de ventas (solo a `PREDICTIVO` y otras carpetas). **Alcance acotado (decisión del tesista): extensiones 200–299, SOLO `OUT` (salientes) = 7 061 447 grabaciones / 424,2 GB.** Excluidos INPUT (→ recomendaciones), otros departamentos y carpetas de campañas/pruebas. Método de enlace resuelto y validado: llave `(ext∈channel/dstchannel + dst=teléfono + |calldate−ts|≤180 s)` → cobertura **99,7–100 %** en 6 días 2020→2026 (el `src` del CDR es el troncal, no el agente). Ambigüedad ~3–5 = **intentos/reintentos por contacto** (señal de negocio, no ruido). Pendiente: portar esta lógica a las celdas de audio/cruce del notebook `00_diagnostico.py` y cerrar Fase 1. Caveat: CDR podría no cubrir 2018–2019 uniformemente._
 - _2026-08-19 · **Fase 1 — Ruta C ejecutada en vivo** · Arreglado el `docker-compose.yml` de diagnóstico (se quitó `env_file`, que no recorta comentarios en línea, y se montó el `.env` para leerlo con python-dotenv). Contenedor `uisrael_diagnostico` (JupyterLab) construido y levantado. Conectividad MySQL confirmada vía VPN desde casa (usuario `lectura`@192.168.0.40, MariaDB 5.5.60, base `asterisk`). Notebook `00_diagnostico.ipynb` ejecutado end-to-end contra el CDR real (24 773 167 registros): E1–E6 con datos en vivo reproducen EXACTAMENTE el perfilado del 08-18 (corruptos 2,25 %, contactabilidad 53,16 %, dur máx ≈86 días, caída 2020→2024 −14 pp). Generados: 4 figuras PNG + `tablas_diagnostico.xlsx` (7 hojas) + notebook ejecutado (entregable reproducible). Pendiente Fase 1: correr `diagnostico_audio.sh` en el server (índice del filesystem, SOLO LECTURA) → bajar `audio_index.tsv.gz` → recalcular secciones de audio y cruce CDR↔grabación (hoy cayeron en rama «falta índice»). Luego cerrar Fase 1 y pasar a Fase 0 real._

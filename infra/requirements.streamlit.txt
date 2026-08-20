@@ -1,0 +1,3 @@
+# Imagen del tablero — Fase 0 (placeholder). Streamlit + cliente PostgreSQL.
+streamlit==1.39.0
+psycopg2-binary==2.9.12

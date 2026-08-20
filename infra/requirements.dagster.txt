@@ -1,0 +1,4 @@
+# Imagen Dagster — Fase 0 (orquestador + UI). Versiones de la serie 1.9.
+dagster==1.9.*
+dagster-webserver==1.9.*
+dagster-postgres==0.25.*

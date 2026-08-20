@@ -1,0 +1,142 @@
+# ─────────────────────────────────────────────────────────────
+# Stack principal — Fase 0 (incremental, slice 1: Dagster + PostgreSQL).
+# Kafka, Spark y Streamlit se añaden en slices posteriores.
+#
+# Levantar desde la raíz del repo:
+#   docker compose -f infra/docker-compose.yml up --build -d
+# UI de Dagster:  http://localhost:3000
+# Apagar:         docker compose -f infra/docker-compose.yml down
+# (añadir -v para borrar también los datos de Postgres)
+# ─────────────────────────────────────────────────────────────
+name: uisrael
+
+services:
+  # Metadatos de Dagster (runs, event log, schedules). Luego también capa servida.
+  postgres:
+    image: postgres:16-alpine
+    container_name: uisrael_postgres
+    environment:
+      POSTGRES_USER: dagster
+      POSTGRES_PASSWORD: dagster
+      POSTGRES_DB: dagster
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dagster"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Bus de eventos — Apache Kafka en modo KRaft (sin Zookeeper → más liviano).
+  # Un solo nodo que hace de broker Y controller (combined mode).
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: uisrael_kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # Dos listeners: interno (contenedores) y host (Whisper worker en la laptop).
+      # Bind con host vacío (//:puerto) — no usar 0.0.0.0 (la imagen lo rechaza en advertised).
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # Réplicas = 1 (un solo nodo en desarrollo)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    ports:
+      - "29092:29092"
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
+  # Crea los topics del pipeline una vez que Kafka está sano, luego termina.
+  kafka_init:
+    image: apache/kafka:3.9.0
+    container_name: uisrael_kafka_init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        for T in llamadas.finalizadas asr.jobs asr.results transcripciones anonimizadas analisis.calidad; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic "$$T" --partitions 3 --replication-factor 1
+        done
+        echo "topics listos"
+    restart: "no"
+
+  # UI + GraphQL de Dagster (construye la imagen compartida).
+  dagster_webserver:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.dagster
+    image: uisrael/dagster:dev
+    container_name: uisrael_dagster_webserver
+    command: dagster-webserver -h 0.0.0.0 -p 3000 -w workspace.yaml
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../src:/opt/dagster/app/src
+      - ../infra/dagster/workspace.yaml:/opt/dagster/app/workspace.yaml
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Daemon de Dagster (schedules, sensores, cola de runs). Misma imagen que el webserver.
+  dagster_daemon:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.dagster
+    image: uisrael/dagster:dev
+    container_name: uisrael_dagster_daemon
+    command: dagster-daemon run -w workspace.yaml
+    volumes:
+      - ../src:/opt/dagster/app/src
+      - ../infra/dagster/workspace.yaml:/opt/dagster/app/workspace.yaml
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dagster_webserver:
+        condition: service_started
+    restart: unless-stopped
+
+  # Tablero (Streamlit) — placeholder Fase 0; se desarrolla en la Fase 7.
+  dashboard:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.streamlit
+    image: uisrael/streamlit:dev
+    container_name: uisrael_dashboard
+    command: streamlit run src/dashboard/app.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: dagster
+      POSTGRES_USER: dagster
+      POSTGRES_PASSWORD: dagster
+    ports:
+      - "8501:8501"
+    volumes:
+      - ../src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata: {}
+  kafkadata: {}

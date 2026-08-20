@@ -1,0 +1,5 @@
+# Ubicación del código que Dagster carga (nuestros activos Medallion).
+load_from:
+  - python_file:
+      relative_path: src/definitions.py
+      working_directory: /opt/dagster/app

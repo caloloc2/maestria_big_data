@@ -1,0 +1,10 @@
+# Whisper worker (nativo en el host, fuera de Docker) — Fase 0.D
+# Se instala en un entorno virtual aislado: whisper_worker/.venv
+#
+# Fase 0.D (esqueleto + validación) — versiones fijadas tras validar en la laptop:
+openvino==2026.3.0      # runtime OpenVINO: detecta CPU/GPU Arc/NPU (validado)
+confluent-kafka==2.15.0 # cliente Kafka (consume asr.jobs, publica asr.results)
+#
+# Fase 3 (transcripción real) — se añadirán entonces:
+#   faster-whisper / optimum-intel[openvino]   (motor ASR sobre OpenVINO)
+#   pyannote.audio                             (diarización agente/cliente)

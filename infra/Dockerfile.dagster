@@ -1,0 +1,19 @@
+# Imagen del orquestador Dagster (webserver + daemon comparten esta imagen).
+# La construye el servicio dagster_webserver en docker-compose.yml.
+FROM python:3.11-slim
+
+ENV DAGSTER_HOME=/opt/dagster/dagster_home \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/opt/dagster/app
+
+RUN mkdir -p $DAGSTER_HOME /opt/dagster/app
+
+COPY infra/requirements.dagster.txt /tmp/req.txt
+RUN pip install --no-cache-dir -r /tmp/req.txt
+
+# Configuración de almacenamiento de metadatos (apunta a PostgreSQL)
+COPY infra/dagster/dagster.yaml $DAGSTER_HOME/dagster.yaml
+
+WORKDIR /opt/dagster/app
+# El código (src/) y el workspace.yaml se montan como volúmenes en dev,
+# para editar sin reconstruir la imagen.

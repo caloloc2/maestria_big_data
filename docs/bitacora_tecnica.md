@@ -546,7 +546,13 @@ el streaming sea sostenible. Alternativa futura: acelerar diarización (GPU/otra
 
 `whisper_worker/demo_diarizado.py`: regenera las 2 llamadas más largas con turnos
 ASESOR/CLIENTE, en versión cruda y anonimizada (`data/muestra/ejemplos/*.DIAR_*.txt`).
-Corre en 2º plano (diarización CPU ~0,8×, lenta). [Completar con resultados al terminar.]
+Corre en 2º plano (diarización CPU ~0,8×, lenta).
+**Resultados:** Ej1 (ag.203, 36 min): 2 hablantes, 132 turnos, proc **1841 s** (~31 min);
+Ej2 (ag.204, 33 min): 2 hablantes, 83 turnos, proc **1711 s** (~28 min). Salida por turnos
+`ASESOR:/CLIENTE:` con PII redactada; rol correcto (asesor = pitch, cliente = respuestas cortas).
+Confirma el hallazgo de rendimiento: en CPU la diarización de una llamada larga tarda ~30 min
+(≈ RTF 0,85×) → **la GPU NVIDIA del equipo propuesto la reduciría ~15×**. Caso borde menor: algún
+segmento sin solape queda como rol `?` (silencio/apertura).
 
 ### F.3 Pendiente de Bloque B (en orden)
 

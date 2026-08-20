@@ -605,6 +605,19 @@ Modelo configurable (`GEMINI_MODEL`, default gemini-2.0-flash), `temperature=0`,
   (no muestran el caso discriminante). Para validar poder discriminante hay que evaluar
   **llamadas de cierre reales** (largas). Ejemplo de 3 largas: [ver G.5].
 
+### G.5b Evaluación de 3 llamadas largas (caso discriminante, validado)
+
+Gemini sobre las 3 transcripciones largas anonimizadas (30-36 min):
+- ag. 203: B={B13,B16}, riesgo medio, cliente confundido→interesado→desconfiado, score 22.
+- **ag. 204: B={B01 GARANTIZO,B08,B13,B16}, riesgo ALTO**, cliente neutral→escéptico→negativo, score 11.
+- ag. 217: B={B06,B12,B13,B16}, riesgo alto, cliente neutral→dudoso→neutral, score 11.
+
+**Hallazgo clave (valor de la tesis):** la llamada del ag. 204 contiene **"GARANTIZO" (B01,
+CRÍTICA)** — palabra prohibida que puede generar multa de la Superintendencia; el sistema la
+detecta automáticamente, algo que la auditoría manual (que escucha pocas llamadas) rara vez
+pilla. Gemini además captura **trayectorias de sentimiento del cliente** matizadas. Ninguna
+cerró venta (es_venta=0): pitches largos donde el cliente terminó desconfiando (realista).
+
 ### G.5 Pendiente Fase 4
 
 1. Evaluar llamadas de **cierre** (largas) para ver es_venta=1 / venta_valida variable.

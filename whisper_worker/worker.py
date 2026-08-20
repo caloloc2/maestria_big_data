@@ -21,6 +21,7 @@ TOPIC_IN = os.getenv("ASR_JOBS_TOPIC", "asr.jobs")
 TOPIC_OUT = os.getenv("ASR_RESULTS_TOPIC", "asr.results")
 GROUP_ID = os.getenv("ASR_GROUP", "whisper-worker")
 MAX_MSGS = int(os.getenv("MAX_MSGS", "0"))
+DIARIZE = os.getenv("DIARIZE", "1") == "1"
 
 _running = True
 
@@ -70,7 +71,25 @@ def main() -> int:
         t0 = time.time()
         try:
             tr = asr.transcribe(path, device=dev)
-            anon = anonimizar.anonimizar(tr["text"])
+            n_spk = None
+            if DIARIZE and tr["segments"]:
+                try:
+                    import diarizar
+                    segs, n_spk = diarizar.diarizar_segmentos(path, tr["segments"])
+                    turnos = []
+                    for s in segs:  # fusionar turnos consecutivos del mismo rol
+                        if turnos and turnos[-1]["rol"] == s["rol"]:
+                            turnos[-1]["text"] += " " + s["text"]
+                        else:
+                            turnos.append({"rol": s["rol"], "text": s["text"]})
+                    anon = "\n".join(
+                        f"{t['rol']}: {anonimizar.anonimizar(t['text'])}" for t in turnos
+                    )
+                except Exception as de:  # noqa: BLE001
+                    print(f"[worker]   diarización falló ({de}); sigo sin diarizar")
+                    anon = anonimizar.anonimizar(tr["text"])
+            else:
+                anon = anonimizar.anonimizar(tr["text"])
             result = {
                 "call_id": call_id,
                 "transcript_anon": anon,
@@ -80,11 +99,12 @@ def main() -> int:
                     "proc_seg": round(time.time() - t0, 1),
                     "device": dev,
                     "chunks_descartados": tr["chunks_descartados"],
+                    "n_hablantes": n_spk,
                     "chars": len(anon),
                 },
             }
             print(f"[worker]   -> ok  dur={tr['dur_audio']}s proc={result['meta']['proc_seg']}s "
-                  f"chars={len(anon)} descartados={tr['chunks_descartados']}")
+                  f"hablantes={n_spk} chars={len(anon)} descartados={tr['chunks_descartados']}")
         except Exception as e:  # noqa: BLE001
             result = {"call_id": call_id, "transcript_anon": None, "estado": "error", "error": str(e)}
             print(f"[worker]   -> ERROR: {e}")

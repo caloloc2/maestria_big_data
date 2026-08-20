@@ -519,6 +519,29 @@ usa cp1252 y crasheaba (`UnicodeEncodeError`). Se cambió a `inf` + `PYTHONIOENC
 - PII de **cierre** (cédula/tarjeta) aparece al final; los números dictados se capturan como
   `<DATO_NUMERICO>` (caso PCI).
 
+### F.2f Diarización agente/cliente (pyannote) integrada
+
+**Módulo `whisper_worker/diarizar.py`** (pyannote/speaker-diarization-3.1, HF_TOKEN del .env):
+diariza el audio MONO (separa hablantes por voz), asigna cada segmento del ASR al hablante
+con mayor solape, y decide ROL **ASESOR/CLIENTE** por heurística (frases-ancla del guion +
+quién habla más). Integrado en `worker.py` (var `DIARIZE`, con respaldo: si falla, sigue sin
+diarizar). Salida por turnos: `ASESOR: ... / CLIENTE: ...`, cada turno anonimizado.
+
+**Dependencias / compatibilidad (Windows, notas):**
+- `pyannote.audio==3.3.2` requiere torch/torchaudio 2.2.x → se fijó `torch==2.2.2`,
+  `torchaudio==2.2.2` (CPU) y `numpy==1.26.4` (torch 2.2 no soporta numpy 2).
+- `huggingface_hub` se bajó a `0.25.2` (el nuevo quitó `use_auth_token` que pyannote usa).
+- `speechbrain==0.5.16` (el 1.x tiene un import perezoso que choca con librosa→k2 en runtime);
+  el pipeline 3.1 usa embeddings wespeaker ONNX (`onnxruntime`), no speechbrain. También `matplotlib`.
+
+**Prueba E2E integrada** (llamada 190,7 s, ext 250): worker → **2 hablantes**, transcript por
+turnos ASESOR/CLIENTE anonimizado. Rol correcto (asesor = pitch; cliente = respuestas cortas).
+
+**Rendimiento (hallazgo):** diarización en **CPU a RTF ~0,79–0,85×** (torch no usa la Arc) →
+**es el paso más lento**, ~15× el ASR en GPU (0,055×). Implicación: **diarizar solo las
+llamadas relevantes** (contestadas + largas, ~1,7 % del volumen), NO las 98 % cortas, para que
+el streaming sea sostenible. Alternativa futura: acelerar diarización (GPU/otra librería).
+
 ### F.3 Pendiente de Bloque B (en orden)
 
 1. Completar `worker.py`: normalización (decodificación robusta de mp3) + **anti-alucinación**

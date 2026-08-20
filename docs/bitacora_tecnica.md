@@ -464,6 +464,28 @@ RTF usados: GPU 0,055× / CPU 0,096×. Figura: `docs/figuras/carga_streaming_y_r
   **streaming incremental**; para histórico completo, paralelizar en N nodos (≈290/N días) o
   filtrar a llamadas relevantes (las largas+medias, 1,7 % de las llamadas, son ~32 % del audio).
 
+### F.2d Worker operativo: transcripción + anti-alucinación + anonimización (E2E)
+
+**Módulos nuevos (host, `whisper_worker/`):**
+- `asr.py`: transcripción OpenVINO GenAI (GPU/CPU, fallback a CPU) + **anti-alucinación**
+  (descarta chunks repetidos consecutivos y bucles de un token / baja diversidad léxica).
+  Probado en el audio que antes alucinaba: descartó los chunks de "Nuestros… Nuestros…".
+- `anonimizar.py`: **frontera de privacidad** (Presidio + spaCy ES `es_core_news_md`) con
+  reconocedores propios: **cédula EC (módulo 10)**, **tarjeta (Luhn)**, teléfonos EC
+  (móvil/fijo/+593), nombres (NER), y **números dictados en palabras** (caso PCI:
+  tarjeta/CVV leídos en voz alta → `<DATO_NUMERICO>`). Prueba sintética: `Juan Pérez`→`<NOMBRE>`,
+  `1710034065`→`<CEDULA>`, `4111111111111111`→`<TARJETA>`, `0993303489`→`<TELEFONO>`,
+  "cinco nueve tres…"→`<DATO_NUMERICO>`. (Pendiente pulir: espacio tras `<TARJETA>`.)
+- `worker.py`: consume `asr.jobs` → `asr.transcribe` → `anonimizar.anonimizar` → publica
+  `asr.results` {call_id, transcript_anon, meta}. Var `MAX_MSGS` (test acotado), `ASR_DEVICE`.
+
+**Prueba end-to-end por Kafka (stack real):** job de una llamada de venta de 3,5 min
+(ext 291) → worker en GPU: **audio 225,4 s → proceso 12,3 s (RTF 0,055)**, 17 chunks
+descartados, transcript anonimizado (2 380 chars) publicado y leído de `asr.results`.
+Cadena `asr.jobs → transcribir(GPU+anti-alucinación) → anonimizar → asr.results` **operativa**.
+
+**Dependencias nuevas del venv:** presidio-analyzer, presidio-anonymizer, spacy + es_core_news_md.
+
 ### F.3 Pendiente de Bloque B (en orden)
 
 1. Completar `worker.py`: normalización (decodificación robusta de mp3) + **anti-alucinación**

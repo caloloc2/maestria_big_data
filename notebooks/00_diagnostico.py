@@ -244,91 +244,211 @@ plt.tight_layout(); plt.savefig(FIG_DIR / "e6_por_dia.png", dpi=150); plt.show()
 por_dia
 
 # %% [markdown]
-# ## Audio — Caracterización del filesystem de grabaciones
+# ## Audio — Caracterización del alcance (call center de ventas: ext. 200–299, OUT)
 #
 # Requiere `data/diag/audio_index.tsv.gz` (generado por `scripts/diagnostico_audio.sh`
-# en el servidor Asterisk y descargado con `scp`). Aquí lo parseamos: tamaño total,
-# `.mp3` vs `.wav`, archivos "regados" (fuera de `{ext}/OUT/`) y años.
+# en el servidor Asterisk, SOLO LECTURA, y descargado con `scp`).
+#
+# **Alcance del proyecto (decisión del tesista):** solo las **llamadas salientes** de los
+# agentes de ventas → carpetas `2xx/OUT` con `2xx` = extensión **200–299**. Se excluyen
+# obligatoriamente la subcarpeta `INPUT` (entrantes → trabajo futuro), otros departamentos
+# (300–399, 400–499) y carpetas de proyectos/pruebas/campañas (`PREDICTIVO`,
+# `CLINICA_DE_VENTAS`, etc.), aunque contengan extensiones 2xx en el nombre.
+# Nombre en ventas: `{YYYYMMDDHHmmss}-{extensión}-{teléfono_cliente}` (100 % del periodo).
 
 # %%
+import re
+
 AUDIO_INDEX = Path(os.getenv("AUDIO_INDEX", "/work/data/diag/audio_index.tsv.gz"))
+AUDIO_ROOT_REL = os.getenv("AUDIO_ROOT", "/home/grabacion/monitor/111111111111").rstrip("/") + "/"
+RX_EXT = re.compile(r"^2\d\d$")      # carpeta L1 = extensión 200–299 EXACTA
+RX_TS = re.compile(r"^(\d{14})")     # timestamp YYYYMMDDHHmmss al inicio del nombre
+
+
+def scope_row(rel):
+    """Devuelve (ext, telefono, ts, bytes_ok) si `rel` está en el alcance 2xx/OUT, si no None."""
+    segs = rel.split("/")
+    if len(segs) < 3 or not RX_EXT.match(segs[0]) or segs[1] != "OUT":
+        return None
+    base = re.sub(r"\.(mp3|wav)$", "", segs[-1], flags=re.I)
+    if not RX_TS.match(base):
+        return None
+    flds = base.split("-")
+    tel = "-".join(flds[2:]) if len(flds) >= 3 else ""
+    return (segs[0], tel, base[:14])
+
 
 if AUDIO_INDEX.exists():
-    audio = pd.read_csv(AUDIO_INDEX, sep="\t", names=["path", "bytes", "mtime"],
-                        header=None)
-    audio["ext"] = audio["path"].str.extract(r"\.(mp3|wav)$", expand=False).str.lower()
-    audio["mtime"] = pd.to_datetime(audio["mtime"], unit="s", errors="coerce")
-    audio["fname"] = audio["path"].str.rsplit("/", n=1).str[-1]
-    # Patrón esperado: {YYYYMMDDHHmmss}-{ext}-{seq}
-    parsed = audio["fname"].str.extract(r"(?P<ts>\d{14})-(?P<agente>\d+)-(?P<dst>\w+)")
-    audio = pd.concat([audio, parsed], axis=1)
-    audio["ts_parse"] = pd.to_datetime(audio["ts"], format="%Y%m%d%H%M%S", errors="coerce")
-    audio["anio"] = audio["ts_parse"].dt.year.fillna(audio["mtime"].dt.year)
-    audio["regado"] = ~audio["path"].str.contains("/OUT/", case=False, regex=False)
+    n_files = 0
+    tot_bytes = 0
+    ext_mp3 = 0
+    ext_wav = 0
+    by_year = {}
+    by_year_bytes = {}
+    by_ext = {}
+    with gzip.open(AUDIO_INDEX, "rt", encoding="utf-8", errors="replace") as fh:
+        for ln in fh:
+            cols_ln = ln.rstrip("\n").split("\t")
+            path = cols_ln[0]
+            try:
+                size = int(cols_ln[1])
+            except (IndexError, ValueError):
+                size = 0
+            rel = path[len(AUDIO_ROOT_REL):] if path.startswith(AUDIO_ROOT_REL) else path
+            r = scope_row(rel)
+            if r is None:
+                continue
+            ext_dir, _tel, ts = r
+            n_files += 1
+            tot_bytes += size
+            yr = ts[:4]
+            by_year[yr] = by_year.get(yr, 0) + 1
+            by_year_bytes[yr] = by_year_bytes.get(yr, 0) + size
+            by_ext[ext_dir] = by_ext.get(ext_dir, 0) + 1
+            if path.lower().endswith(".wav"):
+                ext_wav += 1
+            else:
+                ext_mp3 += 1
 
     resumen_audio = pd.DataFrame({
         "métrica": [
-            "Archivos totales", "  .mp3", "  .wav (sin convertir)",
-            "Tamaño total (GB)", "Regados (fuera de {ext}/OUT/)",
-            "Nombre no parseable",
+            "Grabaciones (alcance 200–299 / OUT)", "  .mp3", "  .wav (sin convertir)",
+            "Tamaño total (GB)", "Agentes (extensiones 2xx)",
         ],
         "valor": [
-            len(audio),
-            int((audio["ext"] == "mp3").sum()),
-            int((audio["ext"] == "wav").sum()),
-            round(audio["bytes"].sum() / 1024**3, 2),
-            int(audio["regado"].sum()),
-            int(audio["ts_parse"].isna().sum()),
+            n_files, ext_mp3, ext_wav,
+            round(tot_bytes / 1024**3, 1), len(by_ext),
         ],
     })
+    print(f"ALCANCE 200–299 / OUT: {n_files:,} grabaciones | "
+          f"{tot_bytes/1024**3:.1f} GB | {len(by_ext)} agentes")
     display(resumen_audio)
 
-    por_anio_audio = audio.groupby("anio").size().rename("archivos").reset_index()
-    display(por_anio_audio)
-    resumen_audio.to_csv(TAB_DIR / "tabla1b_audio_resumen.csv", index=False)
+    audio_anual = pd.DataFrame(sorted(by_year.items()), columns=["anio", "archivos"])
+    audio_anual["GB"] = [round(by_year_bytes[y] / 1024**3, 1) for y in audio_anual["anio"]]
+    display(audio_anual)
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.bar(audio_anual["anio"], audio_anual["archivos"], color="#B279A2")
+    ax.set_title("Grabaciones de ventas (200–299 / OUT) por año")
+    ax.set_xlabel("Año"); ax.set_ylabel("N.º de grabaciones")
+    plt.tight_layout(); plt.savefig(FIG_DIR / "audio_ventas_por_anio.png", dpi=150); plt.show()
+
+    audio_top_ext = (pd.DataFrame(sorted(by_ext.items(), key=lambda kv: -kv[1]),
+                                  columns=["extension", "grabaciones"]).head(20))
+    display(audio_top_ext)
+    resumen_audio.to_csv(TAB_DIR / "tabla_audio_resumen.csv", index=False)
+    audio_disponible = True
 else:
     print(f"Falta {AUDIO_INDEX}. Corre scripts/diagnostico_audio.sh en el servidor")
     print("y descárgalo:  scp USER@IP_ASTERISK:/tmp/diag/audio_index.tsv.gz ./data/diag/")
-    audio = None
+    audio_disponible = False
 
 # %% [markdown]
-# ## Cruce CDR ↔ grabación — tasa de emparejamiento
+# ## Cruce CDR ↔ grabación (ventas OUT) — tasa de emparejamiento
 #
-# Umbral de gobernanza: **cobertura ≥ 95 %** en la muestra analítica y
-# **precisión de linkage ≥ 0,98** (verificación a oído aparte).
-# Parametrizado por rango de fechas para mantenerlo tratable en la laptop.
+# **Método (record linkage, ref. Christen 2012):** llave compuesta con tolerancia temporal
+#
+# > audio(`ext`, `teléfono`, `ts`) ↔ CDR(`ext`∈`channel`/`dstchannel`, `dst`=`teléfono`,
+# > `|calldate − ts| ≤ TOL`, vecino más cercano)
+#
+# Claves del hallazgo: el `src` del CDR es el caller-ID del **troncal** (no el agente);
+# la extensión del agente vive en `channel`/`dstchannel` (`SIP/2xx-...`). El `uniqueid`
+# **no** está embebido en las grabaciones de ventas. Umbral de gobernanza: cobertura ≥ 95 %.
+# Parametrizado por rango (un mes representativo) para que sea tratable en la laptop.
 
 # %%
-FECHA_DESDE = "2024-01-01"
-FECHA_HASTA = "2024-12-31"
+FECHA_DESDE = "2025-05-01"
+FECHA_HASTA = "2025-05-31"
+TOL_SEG = 180
 
-if audio is not None:
-    q_muestra = text(f"""
-        SELECT uniqueid, calldate, src, dst, duration, billsec, disposition
+
+def cdr_ext(s):
+    """Extrae la extensión 2xx del agente desde channel/dstchannel (p. ej. SIP/228-...)."""
+    m = re.search(r"(?<!\d)(2\d\d)(?!\d)", str(s))
+    return m.group(1) if m else None
+
+
+if audio_disponible:
+    d0, d1 = FECHA_DESDE.replace("-", ""), FECHA_HASTA.replace("-", "")
+    filas = []
+    with gzip.open(AUDIO_INDEX, "rt", encoding="utf-8", errors="replace") as fh:
+        for ln in fh:
+            path = ln.split("\t", 1)[0]
+            rel = path[len(AUDIO_ROOT_REL):] if path.startswith(AUDIO_ROOT_REL) else path
+            r = scope_row(rel)
+            if r is None:
+                continue
+            ext_dir, tel, ts = r
+            if d0 <= ts[:8] <= d1 and tel:
+                filas.append((ts, ext_dir, tel))
+    aud = pd.DataFrame(filas, columns=["ts", "ext", "phone"])
+    aud["dt"] = pd.to_datetime(aud["ts"], format="%Y%m%d%H%M%S", errors="coerce")
+    print(f"Grabaciones ventas OUT {FECHA_DESDE}..{FECHA_HASTA}: {len(aud):,}  "
+          f"(agentes: {aud['ext'].nunique()}, contactos: {aud['phone'].nunique():,})")
+
+    q_cdr = text(f"""
+        SELECT calldate, dst, channel, dstchannel
         FROM {CDR_TABLE}
-        WHERE calldate BETWEEN :d AND :h
-          AND disposition = 'ANSWERED'
-          AND billsec BETWEEN 10 AND 3600
+        WHERE calldate >= :d AND calldate < :h
     """)
-    cdr = pd.read_sql(q_muestra, engine, params={"d": FECHA_DESDE, "h": FECHA_HASTA})
-    cdr["key"] = (pd.to_datetime(cdr["calldate"]).dt.strftime("%Y%m%d%H%M%S")
-                  + "-" + cdr["src"].astype(str))
+    cdr = pd.read_sql(q_cdr, engine,
+                      params={"d": FECHA_DESDE + " 00:00:00", "h": FECHA_HASTA + " 23:59:59"})
+    cdr["ext_any"] = cdr["channel"].map(cdr_ext).fillna(cdr["dstchannel"].map(cdr_ext))
+    cdr["dt"] = pd.to_datetime(cdr["calldate"], errors="coerce")
 
-    aud = audio.dropna(subset=["ts", "agente"]).copy()
-    aud["key"] = aud["ts"] + "-" + aud["agente"].astype(str)
+    # índice (ext, teléfono) -> lista de tiempos de llamada
+    idx = {}
+    par = cdr.dropna(subset=["ext_any"])
+    for e, dd, t in zip(par["ext_any"], par["dst"].astype(str), par["dt"]):
+        idx.setdefault((e, dd), []).append(t)
 
-    matched = cdr["key"].isin(set(aud["key"]))
-    cobertura = 100 * matched.mean() if len(cdr) else float("nan")
-    print(f"Muestra CDR {FECHA_DESDE}..{FECHA_HASTA} (ANSWERED, billsec 10–3600): {len(cdr):,}")
-    print(f"Emparejados por (timestamp exacto + agente): {matched.sum():,}  "
-          f"=> cobertura {cobertura:.2f} %")
-    print("Nota: emparejar por segundo exacto es estricto; si la cobertura es baja,")
-    print("probar tolerancia ±1–2 s o join por minuto — se ajusta aquí.")
+    def match_key(row):
+        return (row["ext"], row["phone"]) in idx
+
+    def match_win(row, tol=TOL_SEG):
+        lst = idx.get((row["ext"], row["phone"]))
+        return bool(lst) and (not pd.isna(row["dt"])) and \
+            any(abs((row["dt"] - t).total_seconds()) <= tol for t in lst)
+
+    m_key = aud.apply(match_key, axis=1)
+    m_win = aud.apply(match_win, axis=1)
+    cob_key = 100 * m_key.mean() if len(aud) else float("nan")
+    cob_win = 100 * m_win.mean() if len(aud) else float("nan")
+
+    cruce_resumen = pd.DataFrame({
+        "métrica": [
+            "Grabaciones en el rango",
+            "Cobertura (ext + teléfono)",
+            f"Cobertura (ext + teléfono + |t|≤{TOL_SEG}s)",
+            "Huérfanas (sin CDR emparejado)",
+        ],
+        "valor": [
+            f"{len(aud):,}",
+            f"{cob_key:.2f} %",
+            f"{cob_win:.2f} %",
+            f"{(~m_win).sum():,}",
+        ],
+    })
+    display(cruce_resumen)
+    print(f"Umbral de gobernanza (cobertura ≥ 95 %): "
+          f"{'CUMPLE' if cob_win >= 95 else 'NO CUMPLE'}")
+
+    # KPI de intentos/reintentos por contacto (cada grabación = un intento del asesor)
+    intentos = aud.groupby(["ext", "phone"]).size().rename("intentos").reset_index()
+    dist_intentos = (intentos["intentos"].value_counts().sort_index()
+                     .rename_axis("intentos_por_contacto").reset_index(name="n_contactos"))
+    print(f"\nContactos únicos (ext, teléfono): {len(intentos):,} | "
+          f"intentos medios/contacto: {intentos['intentos'].mean():.2f} | "
+          f"máx: {intentos['intentos'].max()}")
+    display(dist_intentos.head(12))
 else:
+    aud = None
+    cruce_resumen = None
     print("Sin índice de audio: no se puede calcular el cruce todavía.")
 
 # %% [markdown]
-# ## Exportación de Tablas 1 y 2 (capítulo académico)
+# ## Exportación de Tablas (capítulo académico)
 
 # %%
 with pd.ExcelWriter(TAB_DIR / "tablas_diagnostico.xlsx") as xl:
@@ -339,4 +459,10 @@ with pd.ExcelWriter(TAB_DIR / "tablas_diagnostico.xlsx") as xl:
     top_src.to_excel(xl, sheet_name="E6_top_agentes", index=False)
     por_hora.to_excel(xl, sheet_name="E6_por_hora", index=False)
     por_dia.to_excel(xl, sheet_name="E6_por_dia", index=False)
+    if audio_disponible:
+        resumen_audio.to_excel(xl, sheet_name="Audio_resumen", index=False)
+        audio_anual.to_excel(xl, sheet_name="Audio_por_anio", index=False)
+        audio_top_ext.to_excel(xl, sheet_name="Audio_top_agentes", index=False)
+    if cruce_resumen is not None:
+        cruce_resumen.to_excel(xl, sheet_name="Cruce_cobertura", index=False)
 print("Tablas exportadas a", TAB_DIR / "tablas_diagnostico.xlsx")

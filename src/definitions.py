@@ -114,10 +114,92 @@ def silver_calls(context: AssetExecutionContext) -> MaterializeResult:
 
 # ─────────────── Zonas Plata/Oro — esqueleto (Fases 3, 4, 6) ───────────────
 @asset(partitions_def=daily, group_name=PLATA, deps=[silver_calls],
-       description="Transcripciones anonimizadas (Whisper worker + Presidio). Fase 3.")
+       description="Transcripciones anonimizadas: encola asr.jobs → worker Whisper → asr.results.")
 def silver_transcriptions(context: AssetExecutionContext) -> MaterializeResult:
-    context.log.info("silver_transcriptions: esqueleto — ASR + anonimización (Fase 3).")
-    return MaterializeResult(metadata={"estado": "esqueleto", "fase": 3})
+    import json
+    import time
+
+    import pandas as pd
+    from confluent_kafka import Consumer, Producer
+    from sqlalchemy import text as sqltext
+
+    from src.processing.config import pg_engine
+    from src.processing.serving import replace_transcripciones
+
+    day = context.partition_key
+    limit = int(os.getenv("ASR_LIMIT", "60"))
+    timeout = int(os.getenv("ASR_TIMEOUT", "1800"))
+    boot = os.getenv("KAFKA_BOOTSTRAP_ASSET", "kafka:9092")
+    audios_dir = os.path.join(DATA_DIR, "muestra", "audios")
+
+    # 1) muestra del día con audio disponible localmente
+    eng = pg_engine()
+    df = pd.read_sql(
+        sqltext("SELECT call_id, audio_path, agente FROM servido.llamadas "
+                "WHERE fecha = :f AND en_muestra"),
+        eng, params={"f": day},
+    )
+    eng.dispose()
+    if not len(df):
+        context.log.warning(f"silver_transcriptions {day}: sin llamadas en muestra.")
+        return MaterializeResult(metadata={"transcritas": 0, "nota": "sin muestra"})
+    df["base"] = df["audio_path"].map(os.path.basename)
+    df["ok"] = df["base"].map(lambda b: os.path.exists(os.path.join(audios_dir, b)))
+    df = df[df["ok"]].head(limit)
+    if not len(df):
+        context.log.warning(f"silver_transcriptions {day}: sin audios locales (copiar muestra).")
+        return MaterializeResult(metadata={"transcritas": 0, "nota": "sin audios locales"})
+
+    # 2) encolar trabajos (ruta host-relativa que lee el worker nativo)
+    agente_de = dict(zip(df["call_id"], df["agente"]))
+    prod = Producer({"bootstrap.servers": boot})
+    ids = set()
+    for _, r in df.iterrows():
+        prod.produce("asr.jobs", json.dumps(
+            {"call_id": r["call_id"], "audio_path": f"data/muestra/audios/{r['base']}"}
+        ).encode("utf-8"))
+        ids.add(r["call_id"])
+    prod.flush(15)
+    context.log.info(f"silver_transcriptions {day}: {len(ids)} jobs encolados; esperando worker...")
+
+    # 3) recoger resultados (dedupe por call_id; grupo único → re-lee desde el inicio)
+    cons = Consumer({
+        "bootstrap.servers": boot,
+        "group.id": f"asset-tr-{day}-{int(time.time())}",
+        "auto.offset.reset": "earliest",
+        "enable.auto.commit": True,
+    })
+    cons.subscribe(["asr.results"])
+    got = {}
+    t0 = time.time()
+    while len(got) < len(ids) and time.time() - t0 < timeout:
+        m = cons.poll(2.0)
+        if m is None or m.error():
+            continue
+        d = json.loads(m.value())
+        if d.get("call_id") in ids:
+            got[d["call_id"]] = d
+    cons.close()
+
+    # 4) guardar transcripciones anonimizadas (solo estado ok)
+    rows = []
+    for cid in ids:
+        d = got.get(cid)
+        if d and d.get("estado") == "ok":
+            me = d.get("meta", {})
+            rows.append({
+                "call_id": cid, "fecha": day, "agente": agente_de.get(cid),
+                "dur_audio": me.get("dur_audio"), "proc_seg": me.get("proc_seg"),
+                "device": me.get("device"), "chunks_descartados": me.get("chunks_descartados"),
+                "chars": me.get("chars"), "transcript_anon": d.get("transcript_anon"),
+            })
+    replace_transcripciones(pd.DataFrame(rows), day)
+    context.log.info(f"silver_transcriptions {day}: transcritas={len(rows)} de {len(ids)}")
+    return MaterializeResult(metadata={
+        "encoladas": len(ids),
+        "transcritas": len(rows),
+        "faltantes": len(ids) - len(rows),
+    })
 
 
 @asset(partitions_def=daily, group_name=ORO, deps=[silver_transcriptions],

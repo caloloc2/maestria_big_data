@@ -48,7 +48,7 @@ def main() -> int:
     producer = Producer({"bootstrap.servers": BOOTSTRAP})
     consumer.subscribe([TOPIC_IN])
     dev = os.getenv("ASR_DEVICE", "GPU")
-    print(f"[worker] escuchando '{TOPIC_IN}' en {BOOTSTRAP} (device={dev}, max={MAX_MSGS or '∞'})")
+    print(f"[worker] escuchando '{TOPIC_IN}' en {BOOTSTRAP} (device={dev}, max={MAX_MSGS or 'inf'})")
 
     processed = 0
     while _running:

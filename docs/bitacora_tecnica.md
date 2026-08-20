@@ -486,6 +486,39 @@ Cadena `asr.jobs → transcribir(GPU+anti-alucinación) → anonimizar → asr.r
 
 **Dependencias nuevas del venv:** presidio-analyzer, presidio-anonymizer, spacy + es_core_news_md.
 
+### F.2e Asset `silver_transcriptions` (Dagster) + validación E2E + ejemplos
+
+**Cierre del flujo de la Fase 3.** Se añadió `servido.transcripciones` (serving.py:
+`ensure_schema_tr`/`replace_transcripciones`), `confluent-kafka` a la imagen Dagster, y se
+implementó el asset `silver_transcriptions` (src/definitions.py): lee `en_muestra` de
+`servido.llamadas` para la partición, filtra a audios disponibles localmente, **encola
+`asr.jobs`** (ruta host-relativa), **espera y recoge `asr.results`** (grupo único, dedupe por
+call_id, timeout) y **escribe la transcripción anonimizada** en `servido.transcripciones`.
+El worker nativo (GPU) corre en el host; el asset (contenedor) usa `kafka:9092`.
+
+**Materialización 2025-05-14 (ASR_LIMIT=25):** `RUN_SUCCESS`, **25/25 transcritas**.
+Validación en PostgreSQL: dur media 152 s, proceso medio 11,3 s (RTF ~0,074), 79 chunks de
+alucinación descartados; anonimización aplicada (20/25 con `<NOMBRE>`, 1 `<TELEFONO>`,
+1 `<CEDULA>`); **0 posibles fugas** (ninguna transcripción con 7+ dígitos seguidos).
+
+**Bug corregido:** el worker imprimía `∞`; con stdout redirigido a archivo (2º plano) Windows
+usa cp1252 y crasheaba (`UnicodeEncodeError`). Se cambió a `inf` + `PYTHONIOENCODING=utf-8`.
+
+**3 ejemplos de llamadas largas** (`whisper_worker/demo_ejemplos.py`, textos en
+`data/muestra/ejemplos/`), ventas de paquetes a EE.UU.:
+- Ej1 (ag. 203, 2023, 36 min): 82 `<NOMBRE>`, 8 `<TELEFONO>` (captó "Ramírez Suárez Cristian",
+  "Elisa Bechalazas").
+- Ej2 (ag. 204, 2021, 33 min): 28 `<NOMBRE>`, 7 `<TELEFONO>`, 2 `<DATO_NUMERICO>` ("Kevin Rodríguez").
+- Ej3 (ag. 217, 2023, 30 min): 44 `<NOMBRE>`, 4 `<TELEFONO>` ("Narcisa Buzos", "Aileen Sanchez").
+
+**Observaciones (para documentación):**
+- Anonimización **agresiva del lado seguro**: falsos positivos de nombre (`Claro`,
+  `Parroquia Valle`, `Le`) → mejor sobre-redactar que fugar; afinable con lista blanca.
+- **Errores del modelo `small`**: "Marketing BIP/Bits" (VIP), "Banco Pincel" (Pichincha),
+  "espalda legal" (respaldo). Subir a `medium`/`large-v3` mejora exactitud a más RTF (a decidir).
+- PII de **cierre** (cédula/tarjeta) aparece al final; los números dictados se capturan como
+  `<DATO_NUMERICO>` (caso PCI).
+
 ### F.3 Pendiente de Bloque B (en orden)
 
 1. Completar `worker.py`: normalización (decodificación robusta de mp3) + **anti-alucinación**

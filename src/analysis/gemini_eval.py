@@ -16,7 +16,7 @@ from .rubrica import detectar
 from .schema import Evaluacion, aplicar_reglas_duras
 
 load_dotenv(".env")
-MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 CRITERIOS_A = """
 A01 Saludo (buenos días/tardes/noches).

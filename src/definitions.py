@@ -203,10 +203,62 @@ def silver_transcriptions(context: AssetExecutionContext) -> MaterializeResult:
 
 
 @asset(partitions_def=daily, group_name=ORO, deps=[silver_transcriptions],
-       description="Evaluaciones de calidad/cumplimiento con Gemini + rúbrica. Fase 4.")
+       description="Evaluaciones de calidad/cumplimiento (determinista + Gemini) sobre texto anonimizado.")
 def gold_evaluations(context: AssetExecutionContext) -> MaterializeResult:
-    context.log.info("gold_evaluations: esqueleto — rúbrica sobre texto anonimizado (Fase 4).")
-    return MaterializeResult(metadata={"estado": "esqueleto", "fase": 4})
+    import json
+    import time
+
+    import pandas as pd
+    from sqlalchemy import text as sqltext
+
+    from src.analysis import gemini_eval
+    from src.processing.config import pg_engine
+    from src.processing.serving import replace_evaluaciones
+
+    day = context.partition_key
+    limit = int(os.getenv("EVAL_LIMIT", "0"))       # 0 = todas
+    delay = float(os.getenv("EVAL_DELAY", "1.5"))   # respeta rate limit de Gemini
+
+    eng = pg_engine()
+    df = pd.read_sql(
+        sqltext("SELECT call_id, agente, transcript_anon FROM servido.transcripciones "
+                "WHERE fecha = :f"),
+        eng, params={"f": day},
+    )
+    eng.dispose()
+    if limit:
+        df = df.head(limit)
+    if not len(df):
+        context.log.warning(f"gold_evaluations {day}: sin transcripciones.")
+        return MaterializeResult(metadata={"evaluadas": 0})
+
+    rows, fallidas = [], 0
+    for _, r in df.iterrows():
+        try:
+            ev = gemini_eval.evaluar(r["call_id"], r["transcript_anon"] or "")
+            rows.append({
+                "call_id": ev.call_id, "fecha": day, "agente": r["agente"], "rubrica": ev.rubrica,
+                "es_venta": ev.es_venta, "venta_valida": ev.venta_valida,
+                "infraccion_critica": ev.infraccion_critica, "calidad_score": ev.calidad_score,
+                "grupo_a": json.dumps(ev.grupo_A), "grupo_b": ",".join(ev.grupo_B_infracciones),
+                "grupo_c": ",".join(ev.grupo_C_omisiones), "riesgo_reclamo": ev.riesgo_reclamo,
+                "sentimiento_asesor": ev.sentimiento_asesor,
+                "sentimiento_cliente": ",".join(ev.sentimiento_cliente_trayectoria),
+                "confianza_llm": ev.confianza_llm, "modelo": ev.modelo,
+            })
+        except Exception as e:  # noqa: BLE001
+            fallidas += 1
+            context.log.warning(f"eval falló call={r['call_id']}: {e}")
+        time.sleep(delay)
+
+    replace_evaluaciones(pd.DataFrame(rows), day)
+    validas = int(sum(x["venta_valida"] for x in rows))
+    context.log.info(f"gold_evaluations {day}: evaluadas={len(rows)} fallidas={fallidas} "
+                     f"venta_valida={validas}")
+    return MaterializeResult(metadata={
+        "evaluadas": len(rows), "fallidas": fallidas,
+        "ventas_validas": validas, "criticas": len(rows) - validas,
+    })
 
 
 @asset(partitions_def=daily, group_name=ORO, deps=[gold_evaluations],

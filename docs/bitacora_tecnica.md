@@ -591,10 +591,23 @@ con la B determinista y se aplican reglas duras. `calidad_score` = % de A cumpli
 se calibran con gold set). Requiere **GEMINI_API_KEY en .env** + `pip install google-generativeai`.
 Modelo configurable (`GEMINI_MODEL`, default gemini-2.0-flash), `temperature=0`, salida JSON.
 
-### G.4 Pendiente Fase 4
+### G.4 Ejecución E2E con Gemini (validado)
 
-1. **GEMINI_API_KEY** del tesista en `.env` → instalar SDK → correr sobre la muestra.
-2. Activo Dagster `gold_evaluations` (dep silver_transcriptions) que persiste evaluaciones.
-3. Gold set (weak supervision): muestreo estratificado + revisión de auditor; métricas P/R/F1.
-4. Calibrar pesos de `calidad_score` con Auditoría; variantes/sinónimos de palabras prohibidas.
+- SDK `google-generativeai==0.8.3` (en imagen Dagster). **Modelo:** `gemini-2.0-flash` dio 404
+  ("no longer available") → se usa **`gemini-3.6-flash`** (ago-2026). `temperature=0`, salida JSON.
+- Tabla `servido.evaluaciones` (serving.py: `ensure_schema_ev`/`replace_evaluaciones`) + activo
+  `gold_evaluations` (definitions.py): lee `servido.transcripciones` del día, corre el análisis
+  híbrido por llamada (pausa `EVAL_DELAY` anti rate-limit), persiste. `RUN_SUCCESS`.
+- **Materialización 2025-05-14: 25/25 evaluadas.** es_venta=1: 0 · venta_valida: 0 · críticas: 25
+  · calidad_score 0/15,4/33 · riesgo {bajo 20, alto 3, medio 2} · sent_asesor {neutral 20,
+  positivo 3, bajo 2} · prohibidas B16×2,B13,B07,B11.
+- **Caveat:** las 25 son prospección corta (152 s prom) que NO cerró → todas venta_valida=0
+  (no muestran el caso discriminante). Para validar poder discriminante hay que evaluar
+  **llamadas de cierre reales** (largas). Ejemplo de 3 largas: [ver G.5].
+
+### G.5 Pendiente Fase 4
+
+1. Evaluar llamadas de **cierre** (largas) para ver es_venta=1 / venta_valida variable.
+2. Gold set (weak supervision): muestreo estratificado + revisión de auditor; métricas P/R/F1.
+3. Calibrar pesos de `calidad_score` con Auditoría; variantes/sinónimos de palabras prohibidas.
 

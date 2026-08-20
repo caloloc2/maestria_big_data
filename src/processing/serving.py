@@ -50,6 +50,33 @@ DDL_TR = [
     "CREATE INDEX IF NOT EXISTS ix_tr_fecha ON servido.transcripciones (fecha)",
 ]
 
+DDL_EV = [
+    "CREATE SCHEMA IF NOT EXISTS servido",
+    """
+    CREATE TABLE IF NOT EXISTS servido.evaluaciones (
+        call_id             text,
+        fecha               date,
+        agente              text,
+        rubrica             text,
+        es_venta            integer,
+        venta_valida        integer,
+        infraccion_critica  boolean,
+        calidad_score       integer,
+        grupo_a             text,
+        grupo_b             text,
+        grupo_c             text,
+        riesgo_reclamo      text,
+        sentimiento_asesor  text,
+        sentimiento_cliente text,
+        confianza_llm       real,
+        modelo              text,
+        run_ts              timestamp DEFAULT now()
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_ev_fecha ON servido.evaluaciones (fecha)",
+    "CREATE INDEX IF NOT EXISTS ix_ev_agente ON servido.evaluaciones (agente)",
+]
+
 
 def ensure_schema() -> None:
     eng = pg_engine()
@@ -86,4 +113,23 @@ def replace_transcripciones(pdf: pd.DataFrame, fecha: str) -> None:
         con.execute(text("DELETE FROM servido.transcripciones WHERE fecha = :f"), {"f": fecha})
     if len(pdf):
         pdf.to_sql("transcripciones", eng, schema="servido", if_exists="append", index=False)
+    eng.dispose()
+
+
+def ensure_schema_ev() -> None:
+    eng = pg_engine()
+    with eng.begin() as con:
+        for stmt in DDL_EV:
+            con.execute(text(stmt))
+    eng.dispose()
+
+
+def replace_evaluaciones(pdf: pd.DataFrame, fecha: str) -> None:
+    """Reemplaza (borra + inserta) las evaluaciones de calidad de `fecha`."""
+    ensure_schema_ev()
+    eng = pg_engine()
+    with eng.begin() as con:
+        con.execute(text("DELETE FROM servido.evaluaciones WHERE fecha = :f"), {"f": fecha})
+    if len(pdf):
+        pdf.to_sql("evaluaciones", eng, schema="servido", if_exists="append", index=False)
     eng.dispose()

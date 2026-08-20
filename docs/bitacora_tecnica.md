@@ -260,3 +260,124 @@ Fase 0 solo construye y valida el andamiaje.
 | **Spark** | — (no aplica) | Preparación distribuida + speedup |
 | **Whisper worker** | Transcribe la llamada en vivo (GPU) | Transcribe la muestra histórica (GPU) |
 | **Presidio / Gemini / PostgreSQL** | Mismos módulos | Mismos módulos |
+
+---
+
+## Parte E — Verificación en vivo y decisiones de despliegue (2026-08-20)
+
+> Sesión desde la **oficina**, en la **misma LAN del Asterisk, sin VPN**. Se reprodujo
+> end-to-end lo construido en la Fase 2 contra la fuente real y se decidió el mapa de
+> despliegue por máquina. Figuras asociadas en `docs/figuras/`.
+
+### E.1 Conectividad directa por LAN (sin VPN)
+
+- `CDR_HOST=192.168.0.40:3306` alcanzable por TCP directo (sin VPN). La lectura del CDR
+  del **mes completo** (242 106 filas) tardó **3–5 s** — mucho más rápido que por VPN.
+- Implicación: en la oficina, tanto el batch (lectura de CDR) como la futura copia de la
+  muestra de audios (Fase 3) van sobre LAN → rápido y fiable.
+
+### E.2 Reproducción del pipeline Fase 2 (stack completo levantado)
+
+- `docker compose -f infra/docker-compose.yml up --build -d` → 5 contenedores `Up`
+  (`postgres` y `kafka` healthy; `dagster_webserver` :3000, `dagster_daemon`,
+  `dashboard` :8501). Primera build lenta por Java 17 + PySpark (esperado).
+- Materialización `bronze_cdr` + `silver_calls` partición **2025-05-14** → `RUN_SUCCESS`.
+- **Verificado directamente en PostgreSQL** (`servido.llamadas`, día 2025-05-14):
+  **6 791 emparejadas**, **6 791 audios únicos** (1:1 perfecto), `max(diff_seg)=1 s`,
+  `en_muestra=1 389`, **cobertura 100 %** — reproduce exactamente la Fase 1.
+
+### E.3 Aclaración conceptual: qué mide el cruce y sobre qué opera
+
+- El cruce (Fase 2) opera **solo sobre datos**: el **CDR** (metadatos de MySQL) y el
+  **índice de audio** (lista de **nombres** de archivo, p. ej.
+  `20250514093012-228-0991234567.mp3`). **No se abre, decodifica ni escucha ningún audio.**
+  Del nombre se extrae (extensión, teléfono, fecha).
+- El **contenido** de las grabaciones se procesa recién en la **Fase 3 (Whisper)**.
+- Los tiempos del test miden el **bloque completo del mes** (153 533 grabaciones), no una
+  llamada: equivale a **~0,7–4 ms por llamada**. Emparejar una llamada es baratísimo; lo
+  que cuesta es hacerlo 153 mil veces → por eso se paraleliza. Analogía: se cruzan las
+  **etiquetas** de préstamo contra la lista de **títulos**, sin "leer los libros" (eso es ASR).
+
+### E.4 Test de escalabilidad (speedup) — dos escenarios medidos
+
+Mismo job (cruce del mes mayo 2025, 153 533 grabaciones), variando núcleos de Spark
+(`local[N]`). Correctitud **idéntica y determinista** en todas las corridas:
+153 533/153 533 emparejadas (100 %), `en_muestra = 28 844`, cambie N como cambie.
+
+| Núcleos | Escenario A — máquina descargada | Escenario B — máquina bajo carga (RAM 87 %) | Aceleración (B) |
+|---|---|---|---|
+| 1 | 390,7 s | **623,1 s** | 1× |
+| 2 | 105,4 s | **196,6 s** | 3,2× |
+| 4 | 56,9 s | **113,4 s** | 5,5× |
+
+- **Aceleración super-lineal** 1→2 núcleos (3,2×, > 2×): con 1 solo núcleo la máquina se
+  queda sin RAM y hace *spilling* a disco + GC; con más núcleos cada uno maneja menos datos
+  y cabe en memoria. **Confirmado experimentalmente**: el escenario B (RAM al 87 %) es más
+  lento que el A en términos absolutos, con el **mismo código y misma cobertura** → evidencia
+  directa del efecto de los recursos (RAM) sobre el rendimiento. Ambos escenarios son válidos
+  para documentar; B refuerza el argumento de dimensionamiento de hardware.
+- Figura: `docs/figuras/speedup_spark_mayo2025.svg` (barras del escenario B).
+- **Uso para la tesis:** (1) evidencia científica de escalabilidad (dimensión Velocidad/Volumen);
+  (2) planificación de capacidad (estimar hardware de producción); (3) justificación de Spark
+  frente a un script mono-hilo (la columna "1 núcleo" sería Python secuencial).
+
+### E.5 Inventario de infraestructura de producción (verificado por capturas)
+
+| Máquina | CPU | RAM | GPU | Notas |
+|---|---|---|---|---|
+| **Laptop dev** | Core Ultra 9 288V | 32 GB | **Arc 140V (16 GB)** | La más potente; nodo GPU + batch |
+| **Servidor HP DL160 Gen9** (host ESXi 6.0) | 16 núcleos Xeon **E5-2609 v4 @ 1,70 GHz** (lentos, sin turbo/HT) | 31,75 GB (**88 % usada**) | **ninguna** | ESXi 6.0 EOL (2016); datastore VMFS5 1,81 TB (709 GB libres) |
+| **VM `Ubuntu_Dockers`** (en el HP) | 8 vCPU | 16 GB | ninguna | Ubuntu 64-bit, docker-server, disco 250 GB; candidato a "cerebro" 24/7 |
+| **Equipo oficina** | Core **i5-1334U** (10 núcleos/12 hilos, 1,3 GHz) | 16 GB DDR4 (1 de 2 ranuras → ampliable a 32) | Intel UHD (integrada, débil) | Alternativa; sin GPU útil para ASR |
+
+- **Techo de RAM del host HP:** ~32 GB totales, 88 % ya en uso. Aunque se apaguen VMs, la
+  `Ubuntu_Dockers` no debería pasar de ~24–26 GB sin ahogar a ESXi. Suficiente para el
+  pipeline + muestra; incómodo para reprocesar años enteros ahí.
+- **Núcleos del HP:** muchos (16) pero lentos (1,7 GHz, chip 2016) → bien para Spark
+  (paralelo), mal para trabajo por-hilo y para Whisper en CPU.
+
+### E.6 Decisión de despliegue por máquina
+
+Figura: `docs/figuras/despliegue_produccion_maquinas.svg`.
+
+| Componente | Dónde vive | Por qué |
+|---|---|---|
+| Kafka + Dagster + PostgreSQL (servida) + streaming 24/7 + tablero | **Servidor HP (`Ubuntu_Dockers`)** | Carga liviana y constante; máquina siempre encendida |
+| **Batch pesado** (reproceso histórico, on-demand) | **Laptop dev** | Máquina más fuerte; el batch es ocasional, no un servicio; escribe resultados en el PostgreSQL del servidor por LAN |
+| **Whisper (ASR)** | **Nodo con GPU** (hoy la laptop Arc) | Desacoplado por Kafka → puede vivir en cualquier máquina de la LAN |
+
+- Regla: **"siempre encendido" → servidor; "pesado y ocasional" → laptop**.
+- El batch corre bien desde la laptop porque alcanza CDR y audio por la LAN y persiste en
+  el Postgres del servidor (mismo dato para tablero y streaming).
+
+### E.7 Whisper en producción — análisis y protocolo de benchmark (Fase 3)
+
+**Problema:** el servidor HP **no tiene GPU** (y ESXi 6.0 EOL hace inviable el passthrough).
+**Solución arquitectónica (ya prevista):** como Kafka **desacopla** a Whisper, el motor de
+transcripción **no tiene que estar en el servidor** — vive en el nodo que tenga mejor cómputo.
+
+Opciones evaluadas:
+- **A — Whisper en CPU en el servidor** (OpenVINO CPU, modelo `small`/`int8`): funciona sin
+  GPU; para *streaming* (una llamada a la vez, volumen bajo) probablemente aguanta; para
+  *batch* de miles es lento. Es el "plan B" del plan ("CPU aceptable en prod").
+- **B — Nodo GPU dedicado (recomendada):** Whisper corre en una máquina con GPU (hoy la
+  laptop Arc; a futuro un mini-PC/estación con GPU) conectada al Kafka del servidor por LAN.
+  Respeta la regla de oro (el audio nunca sale de la LAN) y da velocidad real.
+- **C — GPU en la nube:** descartada (violaría "audio sensible se queda en la LAN").
+
+**Recomendación:** servidor = cerebro 24/7; laptop/nodo-GPU = transcripción + batch on-demand.
+Documentar en la tesis **ambas modalidades (GPU vs CPU) con su throughput medido** → capítulo
+de despliegue/limitaciones. Prueba que el diseño es portable y cuantifica el costo de no tener GPU.
+
+**Protocolo de benchmark Whisper GPU vs CPU (a ejecutar en Fase 3, para el jurado):**
+- *Prerrequisitos:* `whisper_worker/worker.py` completo con faster-whisper instalado + copiar
+  la **muestra de audios** (~500, estratificada por agente/disposition) por SSH (solo lectura).
+- *Diseño:* transcribir el **mismo** conjunto de N audios (p. ej. 50) en dos configuraciones:
+  (1) OpenVINO **GPU** (Arc 140V, laptop) y (2) OpenVINO **CPU** (equivalente al servidor).
+  Modelo fijo (`small`/`int8`) e idénticos parámetros.
+- *Métricas por config:* tiempo total, **tiempo medio por audio**, **factor tiempo-real**
+  (tiempo_proceso ÷ duración_audio; meta del plan **< 3×**), uso de memoria, y verificación
+  de que la transcripción sea equivalente (no cambia el texto, solo la velocidad).
+- *Salida esperada:* una tabla/figura análoga a la del speedup de Spark, pero para ASR, que
+  **decide con evidencia dónde vive Whisper en producción**.
+

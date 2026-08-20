@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="360" viewBox="0 0 680 360" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="680" height="360" fill="#ffffff"/>
+  <style>
+    .t{font-size:14px;fill:#2C2C2A}.th{font-size:14px;font-weight:600;fill:#2C2C2A}
+    .ts{font-size:12px;fill:#5F5E5A}
+    .tealt{fill:#04342C}.teals{fill:#0F6E56}
+  </style>
+
+  <text class="th" x="105" y="34" text-anchor="middle">Fuentes (LAN)</text>
+  <text class="th" x="262" y="34" text-anchor="middle">Bronce (crudo)</text>
+  <text class="th" x="415" y="34" text-anchor="middle">Plata (limpio)</text>
+  <text class="th" x="572" y="34" text-anchor="middle">Servido</text>
+
+  <rect x="40" y="50" width="130" height="52" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text class="th" x="105" y="72" text-anchor="middle">CDR · MySQL</text>
+  <text class="ts" x="105" y="90" text-anchor="middle">solo lectura</text>
+  <rect x="40" y="128" width="130" height="52" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text class="th" x="105" y="150" text-anchor="middle">Índice de audio</text>
+  <text class="ts" x="105" y="168" text-anchor="middle">858 GB · tsv.gz</text>
+
+  <rect x="197" y="50" width="130" height="52" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text class="th" x="262" y="72" text-anchor="middle">bronze_cdr</text>
+  <text class="ts" x="262" y="90" text-anchor="middle">Parquet / día</text>
+  <rect x="197" y="128" width="130" height="52" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text class="th" x="262" y="146" text-anchor="middle">bronze_audio</text>
+  <text class="ts" x="262" y="164" text-anchor="middle">7,06 M · alcance</text>
+
+  <rect x="354" y="72" width="122" height="86" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="th tealt" x="415" y="104" text-anchor="middle">silver_calls</text>
+  <text class="ts teals" x="415" y="122" text-anchor="middle">cruce ext+tel+Δt</text>
+  <text class="ts teals" x="415" y="139" text-anchor="middle">cobertura 100 %</text>
+
+  <rect x="512" y="72" width="128" height="86" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="th tealt" x="576" y="104" text-anchor="middle">servido.llamadas</text>
+  <text class="ts teals" x="576" y="122" text-anchor="middle">PostgreSQL</text>
+  <text class="ts teals" x="576" y="139" text-anchor="middle">1 fila = 1 grabación</text>
+
+  <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#5F5E5A"/></marker></defs>
+  <g stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#ah)" fill="none">
+    <line x1="170" y1="76" x2="193" y2="76"/>
+    <line x1="170" y1="154" x2="193" y2="154"/>
+    <line x1="327" y1="82" x2="350" y2="105"/>
+    <line x1="327" y1="150" x2="350" y2="128"/>
+    <line x1="476" y1="115" x2="508" y2="115"/>
+  </g>
+
+  <line x1="40" y1="200" x2="640" y2="200" stroke="#D3D1C7" stroke-width="1"/>
+  <text class="ts" x="40" y="224">Siguiente — esqueleto (Fases 3–6):</text>
+
+  <g fill="#F1EFE8" stroke="#5F5E5A" stroke-dasharray="5 3">
+    <rect x="40" y="236" width="182" height="50" rx="8"/>
+    <rect x="249" y="236" width="182" height="50" rx="8"/>
+    <rect x="458" y="236" width="182" height="50" rx="8"/>
+  </g>
+  <text class="th" x="131" y="258" text-anchor="middle">silver_transcriptions</text>
+  <text class="ts" x="131" y="276" text-anchor="middle">Whisper + Presidio · F3</text>
+  <text class="th" x="340" y="258" text-anchor="middle">gold_evaluations</text>
+  <text class="ts" x="340" y="276" text-anchor="middle">Gemini + rúbrica · F4</text>
+  <text class="th" x="549" y="258" text-anchor="middle">gold_kpis</text>
+  <text class="ts" x="549" y="276" text-anchor="middle">anomalías / agente · F6</text>
+
+  <g stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#ah)" fill="none">
+    <line x1="222" y1="261" x2="245" y2="261"/>
+    <line x1="431" y1="261" x2="454" y2="261"/>
+    <path d="M 576 158 L 576 210 L 131 210 L 131 234"/>
+  </g>
+  <text class="ts" x="353" y="205" text-anchor="middle">muestra (en_muestra) → asr.jobs</text>
+
+  <text class="ts" x="40" y="312">Verde = construido y validado en Fase 2 · Gris punteado = definido, sin lógica aún</text>
+</svg>

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="340" viewBox="0 0 680 340" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="680" height="340" fill="#ffffff"/>
+  <style>
+    .t{font-size:14px;fill:#2C2C2A}.th{font-size:14px;font-weight:600;fill:#2C2C2A}
+    .ts{font-size:12px;fill:#5F5E5A}
+  </style>
+
+  <line x1="90" y1="280" x2="620" y2="280" stroke="#5F5E5A" stroke-width="1.5"/>
+
+  <rect x="135" y="80" width="90" height="200" rx="4" fill="#E1F5EE" stroke="#0F6E56"/>
+  <rect x="295" y="217" width="90" height="63" rx="4" fill="#E1F5EE" stroke="#0F6E56"/>
+  <rect x="455" y="244" width="90" height="36" rx="4" fill="#E1F5EE" stroke="#0F6E56"/>
+
+  <text class="th" x="180" y="70" text-anchor="middle">623 s</text>
+  <text class="th" x="340" y="207" text-anchor="middle">197 s</text>
+  <text class="th" x="500" y="234" text-anchor="middle">113 s</text>
+
+  <text class="t" x="180" y="300" text-anchor="middle">1 núcleo</text>
+  <text class="t" x="340" y="300" text-anchor="middle">2 núcleos</text>
+  <text class="t" x="500" y="300" text-anchor="middle">4 núcleos</text>
+
+  <text class="ts" x="180" y="320" text-anchor="middle">1× (referencia)</text>
+  <text class="ts" x="340" y="320" text-anchor="middle">3,2× más rápido</text>
+  <text class="ts" x="500" y="320" text-anchor="middle">5,5× más rápido</text>
+
+  <text class="ts" x="90" y="40">Mes mayo 2025 · 153 533 grabaciones · cobertura 100 % en las tres corridas</text>
+</svg>

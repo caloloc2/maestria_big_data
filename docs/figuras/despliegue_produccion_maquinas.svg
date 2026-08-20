@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="350" viewBox="0 0 680 350" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="680" height="350" fill="#ffffff"/>
+  <style>
+    .t{font-size:14px;fill:#2C2C2A}.th{font-size:14px;font-weight:600;fill:#2C2C2A}
+    .ts{font-size:12px;fill:#5F5E5A}
+    .tealt{fill:#04342C}.teals{fill:#0F6E56}.bluet{fill:#042C53}.blues{fill:#185FA5}
+  </style>
+
+  <rect x="210" y="46" width="260" height="54" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text class="th" x="340" y="72" text-anchor="middle">Fuente · Asterisk (LAN)</text>
+  <text class="ts" x="340" y="90" text-anchor="middle">CDR (SQL) + grabaciones (audio)</text>
+
+  <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="none" stroke="#5F5E5A"/></marker></defs>
+  <g stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#ah)" fill="none">
+    <line x1="300" y1="100" x2="197" y2="154"/>
+    <line x1="382" y1="100" x2="498" y2="154"/>
+  </g>
+  <text class="ts" x="205" y="133">audio + CDR</text>
+  <text class="ts" x="470" y="133">CDR (streaming)</text>
+
+  <rect x="40" y="158" width="270" height="128" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="th tealt" x="175" y="184" text-anchor="middle">Laptop dev · GPU Arc</text>
+  <text class="ts teals" x="60" y="214">· Whisper worker (GPU)</text>
+  <text class="ts teals" x="60" y="236">· ASR de streaming y batch</text>
+  <text class="ts teals" x="60" y="258">· Batch pesado on-demand (Spark)</text>
+  <text class="ts teals" x="60" y="278" font-style="italic">solo cuando se dispara</text>
+
+  <rect x="370" y="158" width="270" height="128" rx="8" fill="#E6F1FB" stroke="#185FA5"/>
+  <text class="th bluet" x="505" y="184" text-anchor="middle">Servidor HP (siempre on)</text>
+  <text class="ts blues" x="390" y="214">· Kafka + Dagster</text>
+  <text class="ts blues" x="390" y="236">· PostgreSQL (capa servida)</text>
+  <text class="ts blues" x="390" y="258">· Streaming 24/7 + tablero</text>
+  <text class="ts blues" x="390" y="278" font-style="italic">Ubuntu_Dockers · 8 vCPU</text>
+
+  <g stroke="#5F5E5A" stroke-width="1.5">
+    <line x1="175" y1="286" x2="175" y2="312"/>
+    <line x1="505" y1="286" x2="505" y2="312"/>
+    <line x1="175" y1="312" x2="505" y2="312"/>
+  </g>
+  <text class="ts" x="340" y="332" text-anchor="middle">LAN — Kafka (asr.jobs / asr.results) · el batch escribe en PostgreSQL</text>
+</svg>

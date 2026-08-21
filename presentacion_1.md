@@ -3,8 +3,9 @@
 **Proyecto:** Solución Big Data para análisis de calidad y cumplimiento de llamadas del call
 center de ventas (Corporación Marketing Vip S.A., aliada de Diners Club).
 **Estado:** he implementado y validado el flujo de **procesamiento e inteligencia completo en
-batch sobre datos reales de producción** (Fases 1, 0, 2, 3 y 4). Me quedan pendientes el
-disparador de *streaming* (Fase 5) y el tablero (Fase 7).
+batch sobre datos reales de producción** (Fases 1, 0, 2, 3 y 4), con las zonas Bronce/Plata sobre
+un **lago de datos MinIO** (ver §4.2). Me quedan pendientes el disparador de *streaming* (Fase 5)
+y el tablero (Fase 7).
 
 > **Términos clave (para leer este documento):**
 > - **RTF** (*Real-Time Factor*, factor de tiempo real) = tiempo de proceso ÷ duración del audio.
@@ -30,7 +31,7 @@ incremental, validando y corrigiendo en cada fase:
 |---|---|---|
 | **1 · Diagnóstico** | Perfilé el CDR, caractericé el audio y resolví el enlace | Enlace **100 %**; alcance definido (7,06 M grab. / 424 GB) |
 | **0 · Infraestructura** | Levanté el stack dockerizado (Dagster + Kafka/KRaft + PostgreSQL + Streamlit) + worker | Un comando levanta todo; GPU Arc detectada |
-| **2 · Batch (Spark)** | Implementé el cruce CDR↔grabación a escala + zonas Bronce/Plata | Cobertura 100 %, **speedup 6,9×** |
+| **2 · Batch (Spark)** | Implementé el cruce CDR↔grabación a escala + zonas Bronce/Plata (en MinIO) | Cobertura 100 %, **speedup hasta 5,5×** (según carga, §5.1) |
 | **3 · ASR + privacidad** | Construí transcripción (GPU) + diarización + anonimización | **0 fugas de PII**; RTF 0,05× |
 | **4 · Análisis (Gemini)** | Desarrollé la rúbrica híbrida (reglas + IA) sobre texto anonimizado | Detecta **"GARANTIZO"**; evaluación estructurada |
 
@@ -115,6 +116,7 @@ frontera de privacidad, Gemini y capa servida:
 | **pyannote** | Diarización agente/cliente | Separa hablantes en audio mono |
 | **Presidio + spaCy** | **Anonimización** (frontera PII) | Solo texto anonimizado va a la nube |
 | **Gemini** | Análisis de calidad/cumplimiento | Juicio contextual sobre la rúbrica |
+| **MinIO** (object store S3) | **Lago de datos** (zonas Bronce/Plata en Parquet) | On-premise y S3-compatible; desacopla el almacenamiento del filesystem, dentro de la LAN |
 | **PostgreSQL** | Capa servida | Alimenta tablero y métricas |
 
 **Diseñé batch y streaming como el mismo flujo, con distinto disparo.** Comparten el 100 % de los
@@ -139,6 +141,33 @@ inferior del gráfico integral). Manejo **dos tipos** complementarios:
 > cumplimiento** (rúbrica y palabras prohibidas, que responden a la normativa de la
 > Superintendencia). El sistema cubre ambas.
 
+### 4.2 Almacenamiento: lago de datos (MinIO) + capa servida (PostgreSQL)
+
+Adopté el patrón estándar **lago + almacén servido**. Las zonas **Bronce y Plata** (dato crudo e
+intermedio, en Parquet) viven en **MinIO**, un *object store* **S3-compatible on-premise** que actúa
+como **lago de datos** dentro de la LAN (coherente con mi regla de privacidad: nada sensible sale de
+la red). La **capa servida** que consume el tablero (`servido.llamadas / transcripciones /
+evaluaciones`) vive en **PostgreSQL**. Dagster no almacena los datos: es el orquestador y solo guarda
+su metadato de ejecución (también en PostgreSQL). **Spark** lee y escribe el lago mediante el
+conector **S3A** (rutas `s3a://`).
+
+![Cómo el pipeline habla con MinIO (S3A / Hadoop / s3fs)](docs/figuras/infra_minio_s3a.svg)
+
+| Qué | Dónde vive | Formato |
+|---|---|---|
+| Bronce (`bronze_cdr`, `bronze_audio_index`) | **MinIO** — bucket `bronce` | Parquet |
+| Plata (`silver_calls`) | **MinIO** — bucket `plata` (+ Postgres servido) | Parquet |
+| Plata (`silver_transcriptions`) y Oro (`gold_evaluations`) | **PostgreSQL** (capa servida) | Tablas SQL |
+| Metadato de Dagster (runs, linaje) | **PostgreSQL** | Tablas SQL |
+
+**Por qué MinIO y no el filesystem:** desacopla el almacenamiento del disco de una máquina, habilita
+acceso concurrente por API S3 (cualquier nodo del pipeline lee/escribe el mismo lago) y da una base
+lista para crecer (retención, versionado, y a futuro que varios *workers* compartan el mismo
+almacenamiento). Migré las zonas a MinIO y **re-materialicé los 4 días de mayo 2025 obteniendo
+resultados idénticos** (cobertura 100 %, mismos conteos) — el cambio no alteró ningún resultado, solo
+*dónde* se guarda el Parquet. El **audio en sí no se copia al lago** (sigue en la LAN, procesado
+localmente por el *worker*); en MinIO va el *índice* de audio (metadatos), no las grabaciones.
+
 ---
 
 ## 5. Resultados con datos reales
@@ -146,9 +175,19 @@ inferior del gráfico integral). Manejo **dos tipos** complementarios:
 ### 5.1 Fase 2 — Escalabilidad batch (Spark)
 
 Validé el cruce CDR↔grabación con **100 % de cobertura** (mayo 2025: 153 533/153 533). Medí la
-escalabilidad del mismo trabajo variando núcleos:
+escalabilidad del mismo trabajo variando núcleos, en **dos escenarios** (leyendo el índice desde
+el lago MinIO):
 
 ![Speedup Spark](docs/figuras/speedup_spark_mayo2025.svg)
+
+**Lo que aprendí (honesto):** el *speedup* de Spark **depende de si la RAM es el cuello de
+botella**. Con la máquina bajo carga (RAM ~87 %), a 1 núcleo hay *spilling* a disco y GC, y agregar
+núcleos ayuda mucho (**5,5× a 4 núcleos**) — es el escenario más parecido a producción. Con la
+máquina sin presión de memoria (leyendo desde MinIO), el trabajo ya es rápido a cualquier número de
+núcleos (35,5 → 20,1 s) y el paralelismo rinde menos (**1,8× a 4 núcleos**). En ambos casos la
+**cobertura fue 100 %** y **MinIO no añadió penalización**: el mismo cruce corre en ~20-35 s leyendo
+el índice desde el lago. Conclusión: el sistema **escala cuando importa** (memoria limitada) y es
+rápido cuando hay holgura; la elección del almacenamiento (MinIO) no degrada el desempeño.
 
 ### 5.2 Fase 3 — Audio → texto seguro
 

@@ -15,7 +15,7 @@ from pyspark.sql import functions as F
 
 from .audio_index import build_audio_scope  # noqa: F401 (disponible si no hay bronze)
 from .cdr import read_cdr
-from .config import DATA_DIR
+from .config import AUDIO_INDEX_S3A, DATA_DIR  # noqa: F401 (DATA_DIR usado si se reactiva lo local)
 from .linkage import link_calls
 from .spark_session import get_spark
 
@@ -38,7 +38,7 @@ def run(ym: str, cores):
     spark = get_spark("validate_month", cores=str(cores))
     try:
         cdr = spark.createDataFrame(cdr_pdf)
-        audio = spark.read.parquet(os.path.join(DATA_DIR, "bronze", "audio_index"))
+        audio = spark.read.parquet(AUDIO_INDEX_S3A)
         audio = audio.where(F.substring("ts", 1, 6) == ym.replace("-", ""))
         n_audio = audio.count()
 

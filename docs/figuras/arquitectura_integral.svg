@@ -21,17 +21,28 @@
   <text class="zone" x="222" y="637" text-anchor="end" fill="#854F0B">ORO</text>
   <text class="zone" x="222" y="737" text-anchor="end" fill="#185FA5">SERVIDO</text>
 
+  <!-- MinIO — lago de datos (Bronce/Plata en Parquet) -->
+  <g stroke="#5E3B9E" stroke-width="1.3" stroke-dasharray="4 3" fill="none">
+    <path d="M154,262 L250,183"/>
+    <path d="M154,288 L250,247"/>
+  </g>
+  <rect x="52" y="232" width="102" height="92" rx="10" fill="#F4F1FB" stroke="#5E3B9E" stroke-width="1.6"/>
+  <text class="th" x="103" y="262" text-anchor="middle" fill="#5E3B9E">MinIO</text>
+  <text class="ts" x="103" y="279" text-anchor="middle" fill="#5E3B9E">lago de datos</text>
+  <text class="ts" x="103" y="296" text-anchor="middle" fill="#5E3B9E">Bronce + Plata</text>
+  <text class="ts" x="103" y="312" text-anchor="middle" fill="#5E3B9E">s3a:// · Parquet</text>
+
   <rect x="250" y="96"  width="230" height="46" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
   <text class="th" x="365" y="116" text-anchor="middle">Asterisk — Fuente (LAN)</text>
   <text class="ts" x="365" y="132" text-anchor="middle">CDR (MariaDB) + grabaciones</text>
 
   <rect x="250" y="160" width="230" height="46" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
   <text class="th" x="365" y="180" text-anchor="middle">bronze_cdr · bronze_audio_index</text>
-  <text class="ts" x="365" y="196" text-anchor="middle">Parquet particionado por día</text>
+  <text class="ts" x="365" y="196" text-anchor="middle">Parquet en MinIO · s3a://bronce</text>
 
   <rect x="250" y="224" width="230" height="46" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
   <text class="th tealt" x="365" y="244" text-anchor="middle">silver_calls</text>
-  <text class="ts teals" x="365" y="260" text-anchor="middle">cruce CDR↔grabación (Spark)</text>
+  <text class="ts teals" x="365" y="260" text-anchor="middle">cruce (Spark) → MinIO s3a://plata</text>
 
   <rect x="250" y="288" width="230" height="46" rx="8" fill="#E6F1FB" stroke="#185FA5"/>
   <text class="th bluet" x="365" y="308" text-anchor="middle">Kafka (KRaft)</text>
@@ -80,7 +91,7 @@
 
   <text class="ts" x="496" y="123">192.168.0.40 · SOLO LECTURA</text>
   <text class="ts" x="496" y="187">7,06 M grab. · 858 GB (alcance 424 GB)</text>
-  <text class="ts" x="496" y="251">cobertura 100% · speedup 6,9×</text>
+  <text class="ts" x="496" y="251">cobertura 100% · speedup hasta 5,5× (§5.1)</text>
   <text class="ts" x="496" y="315">bus liviano (sin Zookeeper)</text>
   <text class="ts" x="496" y="379">NODO GPU · RTF 0,05× (18× real)</text>
   <text class="ts" x="496" y="443">CPU · RTF ~0,8× (cuello de botella)</text>

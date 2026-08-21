@@ -1,27 +1,52 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="680" height="340" viewBox="0 0 680 340" font-family="Segoe UI, Arial, sans-serif">
-  <rect x="0" y="0" width="680" height="340" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="410" viewBox="0 0 760 410" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="760" height="410" fill="#ffffff"/>
   <style>
-    .t{font-size:14px;fill:#2C2C2A}.th{font-size:14px;font-weight:600;fill:#2C2C2A}
-    .ts{font-size:12px;fill:#5F5E5A}
+    .t{font-size:13px;fill:#2C2C2A}.th{font-size:13px;font-weight:600;fill:#2C2C2A}
+    .ts{font-size:11px;fill:#5F5E5A}.sp{font-size:11px;font-weight:600}
+    .pt{font-size:13px;font-weight:600}
   </style>
 
-  <line x1="90" y1="280" x2="620" y2="280" stroke="#5F5E5A" stroke-width="1.5"/>
+  <text x="30" y="30" font-size="15" font-weight="600" fill="#2C2C2A">Escalabilidad del enlace en Spark — mes mayo 2025 (153 533 grabaciones · cobertura 100 %)</text>
+  <text class="ts" x="30" y="50">El speedup depende de si la RAM es el cuello de botella: con memoria saturada, más núcleos ayudan mucho (evitan spilling); sin presión, el trabajo ya es rápido.</text>
 
-  <rect x="135" y="80" width="90" height="200" rx="4" fill="#E1F5EE" stroke="#0F6E56"/>
-  <rect x="295" y="217" width="90" height="63" rx="4" fill="#E1F5EE" stroke="#0F6E56"/>
-  <rect x="455" y="244" width="90" height="36" rx="4" fill="#E1F5EE" stroke="#0F6E56"/>
+  <!-- divisoria -->
+  <line x1="380" y1="80" x2="380" y2="352" stroke="#E5E3DD" stroke-width="1.5"/>
 
-  <text class="th" x="180" y="70" text-anchor="middle">623 s</text>
-  <text class="th" x="340" y="207" text-anchor="middle">197 s</text>
-  <text class="th" x="500" y="234" text-anchor="middle">113 s</text>
+  <!-- ===== Panel izquierdo: bajo carga ===== -->
+  <text class="pt" x="200" y="100" text-anchor="middle" fill="#0F6E56">Bajo carga (RAM ~87 %) — escenario producción</text>
+  <line x1="70" y1="300" x2="330" y2="300" stroke="#5F5E5A" stroke-width="1.3"/>
 
-  <text class="t" x="180" y="300" text-anchor="middle">1 núcleo</text>
-  <text class="t" x="340" y="300" text-anchor="middle">2 núcleos</text>
-  <text class="t" x="500" y="300" text-anchor="middle">4 núcleos</text>
+  <rect x="92"  y="130" width="56" height="170" rx="4" fill="#E1F5EE" stroke="#0F6E56"/>
+  <rect x="172" y="246" width="56" height="54"  rx="4" fill="#E1F5EE" stroke="#0F6E56"/>
+  <rect x="252" y="269" width="56" height="31"  rx="4" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="th" x="120" y="122" text-anchor="middle">623 s</text>
+  <text class="th" x="200" y="238" text-anchor="middle">197 s</text>
+  <text class="th" x="280" y="261" text-anchor="middle">113 s</text>
+  <text class="t"  x="120" y="320" text-anchor="middle">1 núcleo</text>
+  <text class="t"  x="200" y="320" text-anchor="middle">2 núcleos</text>
+  <text class="t"  x="280" y="320" text-anchor="middle">4 núcleos</text>
+  <text class="sp" x="120" y="340" text-anchor="middle" fill="#5F5E5A">1×</text>
+  <text class="sp" x="200" y="340" text-anchor="middle" fill="#0F6E56">3,2×</text>
+  <text class="sp" x="280" y="340" text-anchor="middle" fill="#0F6E56">5,5×</text>
 
-  <text class="ts" x="180" y="320" text-anchor="middle">1× (referencia)</text>
-  <text class="ts" x="340" y="320" text-anchor="middle">3,2× más rápido</text>
-  <text class="ts" x="500" y="320" text-anchor="middle">5,5× más rápido</text>
+  <!-- ===== Panel derecho: sin presión (MinIO) ===== -->
+  <text class="pt" x="565" y="100" text-anchor="middle" fill="#185FA5">Sin presión de RAM — leyendo desde MinIO</text>
+  <line x1="435" y1="300" x2="695" y2="300" stroke="#5F5E5A" stroke-width="1.3"/>
 
-  <text class="ts" x="90" y="40">Mes mayo 2025 · 153 533 grabaciones · cobertura 100 % en las tres corridas</text>
+  <rect x="457" y="130" width="56" height="170" rx="4" fill="#E6F1FB" stroke="#185FA5"/>
+  <rect x="537" y="170" width="56" height="130" rx="4" fill="#E6F1FB" stroke="#185FA5"/>
+  <rect x="617" y="204" width="56" height="96"  rx="4" fill="#E6F1FB" stroke="#185FA5"/>
+  <text class="th" x="485" y="122" text-anchor="middle">35,5 s</text>
+  <text class="th" x="565" y="162" text-anchor="middle">27,1 s</text>
+  <text class="th" x="645" y="196" text-anchor="middle">20,1 s</text>
+  <text class="t"  x="485" y="320" text-anchor="middle">1 núcleo</text>
+  <text class="t"  x="565" y="320" text-anchor="middle">2 núcleos</text>
+  <text class="t"  x="645" y="320" text-anchor="middle">4 núcleos</text>
+  <text class="sp" x="485" y="340" text-anchor="middle" fill="#5F5E5A">1×</text>
+  <text class="sp" x="565" y="340" text-anchor="middle" fill="#185FA5">1,3×</text>
+  <text class="sp" x="645" y="340" text-anchor="middle" fill="#185FA5">1,8×</text>
+
+  <line x1="30" y1="364" x2="730" y2="364" stroke="#E5E3DD"/>
+  <text class="ts" x="30" y="384">Mismo trabajo y cobertura (100 %) en los seis casos. El paralelismo escala más cuando la memoria es el límite (izquierda); leer desde MinIO no penaliza (derecha).</text>
+  <text class="ts" x="30" y="400">Nota: las barras están normalizadas dentro de cada panel (los tiempos absolutos difieren ~18× por el estado de RAM de la máquina, no por el almacenamiento).</text>
 </svg>

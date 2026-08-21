@@ -630,3 +630,70 @@ cerró venta (es_venta=0): pitches largos donde el cliente terminó desconfiando
 2. Gold set (weak supervision): muestreo estratificado + revisión de auditor; métricas P/R/F1.
 3. Calibrar pesos de `calidad_score` con Auditoría; variantes/sinónimos de palabras prohibidas.
 
+---
+
+## Parte H — Integración de MinIO (lago de datos S3-compatible)
+
+**Motivación.** Hasta la Parte G las zonas Medallion Bronce/Plata se guardaban como Parquet en el
+**filesystem local** (`../data` montado en los contenedores Dagster). Se integró **MinIO** — un
+*object store* S3-compatible on-premise — como **lago de datos**, para desacoplar el
+almacenamiento del filesystem y alinear la arquitectura con un patrón estándar de data lake
+(encaja con la gobernanza: self-hosted, dentro de la LAN). Es la **decisión de arquitectura H1**.
+
+**Alcance (Opción A, la mínima y limpia).** MinIO reemplaza **solo** el Parquet de las zonas
+Bronce/Plata. **No cambian:** la capa servida `servido.*` (sigue en PostgreSQL → patrón *lago +
+almacén servido*), el metadato de Dagster (PostgreSQL), Kafka, la fuente CDR (MariaDB), ni el
+worker ASR / audio muestreado (siguen locales en el host). Dagster sigue siendo orquestador
+agnóstico al almacenamiento.
+
+**H.1 Cambios de infraestructura.**
+- `docker-compose.yml`: servicio `minio` (`minio/minio`, API S3 en 9000, consola en 9001, volumen
+  `miniodata`) + `minio_init` (`minio/mc`, crea los buckets `bronce`/`plata` y termina, mismo
+  patrón que `kafka_init`). Variables S3 y `depends_on: minio` en los servicios Dagster.
+- `Dockerfile.dagster`: se **hornean** los JARs de conectividad S3A —
+  `hadoop-aws-3.3.4.jar` + `aws-java-sdk-bundle-1.12.262.jar` (versión atada a PySpark 3.5.3 →
+  cliente Hadoop 3.3.4)— en el directorio `jars` de PySpark, para no depender de internet en
+  runtime (despliegue on-premise reproducible).
+- `requirements.dagster.txt`: `+ s3fs` (escritura de Parquet a MinIO desde pandas).
+
+**H.2 Cambios de código.**
+- `config.py`: `MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY`, buckets, `AUDIO_INDEX_S3A`, y helpers
+  `s3a_spark_configs()` (endpoint host:puerto, `path.style.access=true`, `ssl.enabled=false`,
+  `SimpleAWSCredentialsProvider`) y `s3_storage_options()` (para pandas/s3fs).
+- `spark_session.py`: inyecta las configs S3A en cada `SparkSession`.
+- `definitions.py`: `_paths()` → `s3a://bronce/cdr`, `s3a://bronce/audio_index`,
+  `s3a://plata/calls`; `bronze_cdr` escribe con pandas+s3fs (`s3://…` + `storage_options`), Spark
+  lee el mismo objeto vía `s3a://`.
+- Scripts utilitarios `sample_select.py`, `validate_month.py`, `carga_streaming.py`: la lectura
+  del índice de audio se repunta a `AUDIO_INDEX_S3A`.
+
+**H.3 Migración y validación (2026-08-21).**
+- Prueba de humo `scripts/smoke_s3a.py`: Spark (`s3a://`) y pandas (`s3://` vía s3fs) escriben y
+  leen Parquet en MinIO → **OK** (confirma JARs + credenciales + endpoint).
+- El `bronze_audio_index` existente (257 MiB) se **migró** al bucket con `mc mirror` (evita
+  re-materializar miles de particiones); re-materializarlo por backfill queda opcional.
+- Se **re-materializaron los 4 días** (2025-05-01/14/15/28) de `bronze_cdr` + `silver_calls`
+  leyendo/escribiendo en MinIO. Resultado en `servido.llamadas` **idéntico** al pre-MinIO:
+  emparejadas 2369/6791/6951/8613, en_muestra 465/1389/1386/1452, **cobertura 100 %**, total
+  24 724. `servido.transcripciones` y `servido.evaluaciones` **intactas** (25/25). Objetos
+  verificados en `bronce/cdr` (pandas) y `plata/calls` (Spark, con `_SUCCESS`).
+
+**H.4 Impacto en la evidencia previa.** Nulo en los resultados: activos, linaje, particiones,
+metadatos (cobertura, RTF, evaluaciones) y las 7 capturas de `dagster.md` siguen válidos; solo
+cambia **dónde** se almacena el Parquet (MinIO en vez del filesystem). Actualizados `dagster.md`
+(§1-2 + figura `infra_minio_s3a.svg`), `presentacion_1.md` (§4.2 lago + figura, §5.1 speedup) y
+`arquitectura_integral.svg` (caja MinIO conectada a Bronce/Plata).
+
+**H.5 Re-medición del speedup desde MinIO (2026-08-21).** `validate_month.py` sobre mayo 2025
+leyendo el índice desde MinIO: cobertura **100 %** (153 533/153 533) y enlace 1/2/4 núcleos =
+**35,5 / 27,1 / 20,1 s** (speedup **1,8×** a 4 núcleos). Muy por debajo de los 623/197/113 s
+(5,5×) medidos bajo carga (RAM 87 %). **La diferencia es el estado de RAM de la máquina** (con
+memoria saturada hay *spilling*/GC y el paralelismo ayuda más), **no MinIO**, que no añade
+penalización. Se rehízo la figura `speedup_spark_mayo2025.svg` a **dos paneles** (bajo carga vs
+sin presión/MinIO) para presentar el hallazgo de forma honesta.
+
+**H.6 Decisión pendiente (validar con el tutor).** Gold se mantiene **solo en PostgreSQL** (capa
+servida). Si se pide "Medallion completo sobre el lago", añadir una escritura fina de Gold-Parquet
+a `s3a://` además del Postgres (~5 líneas en `gold_evaluations`). No es obligatorio (Medallion
+exige el *layering* de calidad, no object storage en las tres zonas); es narrativa.
+

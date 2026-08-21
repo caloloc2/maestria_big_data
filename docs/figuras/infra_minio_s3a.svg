@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 660" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#5F5E5A"/>
+    </marker>
+    <style>
+      .t{font-size:14px;font-weight:700;fill:#1a1a1a}
+      .s{font-size:11.5px;fill:#444}
+      .m{font-size:11px;font-family:Consolas,monospace;fill:#185FA5}
+      .h{font-size:16px;font-weight:700;fill:#1a1a1a}
+      .lab{font-size:11px;fill:#5F5E5A;font-style:italic}
+      .cap{font-size:12px;fill:#333}
+      .capb{font-size:12px;font-weight:700;fill:#1a1a1a}
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="660" fill="#FBFAF7"/>
+  <text class="h" x="30" y="34">¿Cómo habla el pipeline con el lago MinIO?</text>
+  <text class="s" x="30" y="54">Spark y pandas no saben "hablar S3" por sí solos: usan un conector que traduce sus lecturas/escrituras al protocolo de MinIO.</text>
+
+  <!-- Columna 1: productores -->
+  <text class="lab" x="120" y="92" text-anchor="middle">QUIÉN ESCRIBE/LEE</text>
+  <rect x="30" y="104" width="180" height="60" rx="8" fill="#E1F5EE" stroke="#0F6E56"/>
+  <text class="t" x="120" y="128" text-anchor="middle">Spark</text>
+  <text class="s" x="120" y="146" text-anchor="middle">asset silver_calls</text>
+
+  <rect x="30" y="184" width="180" height="60" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text class="t" x="120" y="208" text-anchor="middle">pandas</text>
+  <text class="s" x="120" y="226" text-anchor="middle">asset bronze_cdr</text>
+
+  <!-- Columna 2: conectores -->
+  <text class="lab" x="400" y="92" text-anchor="middle">CONECTOR (TRADUCTOR)</text>
+  <rect x="270" y="98" width="260" height="72" rx="8" fill="#EAF1FB" stroke="#185FA5"/>
+  <text class="t" x="400" y="120" text-anchor="middle">S3A  (conector de Hadoop)</text>
+  <text class="s" x="400" y="138" text-anchor="middle">hadoop-aws.jar + aws-java-sdk-bundle.jar</text>
+  <text class="m" x="400" y="156" text-anchor="middle">traduce  s3a://…  →  API S3</text>
+
+  <rect x="270" y="184" width="260" height="60" rx="8" fill="#EAF1FB" stroke="#185FA5"/>
+  <text class="t" x="400" y="206" text-anchor="middle">s3fs  (librería de Python)</text>
+  <text class="m" x="400" y="226" text-anchor="middle">traduce  s3://…  →  API S3</text>
+
+  <!-- flechas productores -> conectores -->
+  <g stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#a)" fill="none">
+    <path d="M210,134 L268,134"/>
+    <path d="M210,214 L268,214"/>
+  </g>
+
+  <!-- Columna 3: protocolo -->
+  <text class="lab" x="620" y="92" text-anchor="middle">PROTOCOLO</text>
+  <g stroke="#BA7517" stroke-width="1.8" marker-end="url(#a)" fill="none">
+    <path d="M530,134 L700,134"/>
+    <path d="M530,214 L700,214"/>
+  </g>
+  <rect x="560" y="150" width="132" height="46" rx="6" fill="#FAEEDA" stroke="#BA7517"/>
+  <text class="s" x="626" y="169" text-anchor="middle">API S3 (HTTP)</text>
+  <text class="m" x="626" y="186" text-anchor="middle" fill="#BA7517">minio:9000</text>
+
+  <!-- Columna 4: MinIO -->
+  <text class="lab" x="820" y="92" text-anchor="middle">LAGO (OBJECT STORE)</text>
+  <rect x="700" y="98" width="230" height="230" rx="10" fill="#F4F1FB" stroke="#5E3B9E" stroke-width="2"/>
+  <text class="t" x="815" y="122" text-anchor="middle" fill="#5E3B9E">MinIO — lago on-premise</text>
+
+  <rect x="716" y="134" width="198" height="86" rx="6" fill="#fff" stroke="#0F6E56"/>
+  <text class="capb" x="726" y="152">bucket  bronce</text>
+  <text class="m" x="726" y="170">cdr/date=2025-05-14/part.parquet</text>
+  <text class="m" x="726" y="186">audio_index/fecha=…/part-*.parquet</text>
+  <text class="s" x="726" y="206">(dato crudo · Parquet)</text>
+
+  <rect x="716" y="228" width="198" height="86" rx="6" fill="#fff" stroke="#185FA5"/>
+  <text class="capb" x="726" y="246">bucket  plata</text>
+  <text class="m" x="726" y="264">calls/date=2025-05-14/part-*.parquet</text>
+  <text class="m" x="726" y="280">calls/date=…/_SUCCESS</text>
+  <text class="s" x="726" y="300">(dato enlazado · Parquet)</text>
+
+  <!-- PostgreSQL aparte -->
+  <rect x="30" y="300" width="500" height="70" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-dasharray="0"/>
+  <text class="t" x="46" y="324">PostgreSQL — capa servida (NO pasa por S3A)</text>
+  <text class="s" x="46" y="344">servido.llamadas · transcripciones · evaluaciones  →  la lee el Tablero por SQL</text>
+  <text class="s" x="46" y="360">Aquí también vive el metadato de Dagster (runs, linaje).</text>
+
+  <!-- Analogía -->
+  <line x1="30" y1="398" x2="930" y2="398" stroke="#ddd"/>
+  <text class="capb" x="30" y="422">La analogía (para fijar los términos):</text>
+  <text class="cap" x="30" y="444">🏭  <tspan class="capb">MinIO</tspan> = una bodega privada tipo Amazon S3, pero dentro de tu LAN.</text>
+  <text class="cap" x="30" y="464">📦  <tspan class="capb">bucket</tspan> = un pasillo de la bodega ·  <tspan class="capb">objeto</tspan> = una caja (un archivo Parquet).</text>
+  <text class="cap" x="30" y="484">🚚  <tspan class="capb">API S3</tspan> = el protocolo de envío/recepción ·  <tspan class="capb">S3A / s3fs</tspan> = el montacargas que Spark/pandas usan para mover cajas.</text>
+  <text class="cap" x="30" y="504">🧩  Sin ese montacargas (los 2 JARs), Spark no puede entrar a la bodega — por eso se hornean en la imagen.</text>
+
+  <!-- Ejemplo -->
+  <rect x="30" y="524" width="900" height="112" rx="8" fill="#F1EFE8" stroke="#5F5E5A"/>
+  <text class="capb" x="46" y="546">Ejemplo — guardar un día de silver_calls:</text>
+  <text class="cap" x="46" y="566">1) Spark calcula el DataFrame del día  →  2) <tspan class="m">df.write.parquet("s3a://plata/calls/date=2025-05-14")</tspan></text>
+  <text class="cap" x="46" y="586">3) S3A convierte esa escritura en peticiones <tspan class="capb">PUT HTTP</tspan> a <tspan class="m">minio:9000</tspan>  →  4) MinIO guarda los objetos <tspan class="m">part-*.parquet + _SUCCESS</tspan> en el bucket <tspan class="capb">plata</tspan>.</text>
+  <text class="cap" x="46" y="612">Leer después:  <tspan class="m">spark.read.parquet("s3a://plata/calls/date=2025-05-14")</tspan>  →  S3A hace peticiones <tspan class="capb">GET</tspan> y devuelve los datos.</text>
+  <text class="s" x="46" y="630">La capa servida (Postgres) es otro camino: ahí gold_evaluations escribe por SQL y el tablero lee por SQL — sin pasar por el lago.</text>
+</svg>

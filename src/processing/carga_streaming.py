@@ -18,7 +18,7 @@ import pandas as pd
 from pyspark.sql import functions as F
 
 from .cdr import read_cdr
-from .config import DATA_DIR
+from .config import AUDIO_INDEX_S3A, DATA_DIR
 from .linkage import link_calls
 from .spark_session import get_spark
 
@@ -61,7 +61,7 @@ def hms(seg: float) -> str:
 def main():
     bps, dur_media_muestra = calibrar_bps()
     spark = get_spark("carga_streaming", cores="4")
-    idx = spark.read.parquet(os.path.join(DATA_DIR, "bronze", "audio_index"))
+    idx = spark.read.parquet(AUDIO_INDEX_S3A)
     tot_files = idx.count()
     tot_bytes = int(idx.agg(F.sum("bytes")).first()[0])
 

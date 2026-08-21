@@ -23,7 +23,7 @@ import pandas as pd
 from pyspark.sql import functions as F
 
 from .cdr import read_cdr
-from .config import DATA_DIR
+from .config import AUDIO_INDEX_S3A, DATA_DIR
 from .linkage import link_calls
 from .spark_session import get_spark
 
@@ -46,7 +46,7 @@ def _next(day: str) -> str:
 
 def run():
     spark = get_spark("sample_select", cores="4")
-    audio_all = spark.read.parquet(os.path.join(DATA_DIR, "bronze", "audio_index"))
+    audio_all = spark.read.parquet(AUDIO_INDEX_S3A)
     frames = []
     try:
         for day in DIAS:

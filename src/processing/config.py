@@ -19,6 +19,40 @@ AUDIO_INDEX = os.path.join(DATA_DIR, "diag", "audio_index.tsv.gz")
 AUDIO_ROOT = os.getenv("AUDIO_ROOT", "/home/grabacion/monitor/111111111111").rstrip("/") + "/"
 CDR_TABLE = os.getenv("CDR_TABLE", "cdr")
 
+# ── MinIO / lago S3 (zonas Bronce/Plata en Parquet) ─────────────────────────
+# La capa servida sigue en PostgreSQL; MinIO solo reemplaza el filesystem de Parquet.
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "http://minio:9000")  # con esquema (s3fs)
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+BRONCE_BUCKET = os.getenv("BRONCE_BUCKET", "bronce")
+PLATA_BUCKET = os.getenv("PLATA_BUCKET", "plata")
+# Índice de audio (Bronce) en el lago — lo escribe el activo `bronze_audio_index`.
+AUDIO_INDEX_S3A = f"s3a://{BRONCE_BUCKET}/audio_index"
+
+
+def s3a_spark_configs() -> dict:
+    """Configuración S3A para que Spark lea/escriba en MinIO vía `s3a://`."""
+    endpoint = MINIO_ENDPOINT.replace("https://", "").replace("http://", "")  # host:puerto
+    return {
+        "spark.hadoop.fs.s3a.endpoint": endpoint,
+        "spark.hadoop.fs.s3a.access.key": MINIO_ACCESS_KEY,
+        "spark.hadoop.fs.s3a.secret.key": MINIO_SECRET_KEY,
+        "spark.hadoop.fs.s3a.path.style.access": "true",       # requerido por MinIO
+        "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",  # MinIO en HTTP (LAN)
+        "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+        "spark.hadoop.fs.s3a.aws.credentials.provider":
+            "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
+    }
+
+
+def s3_storage_options() -> dict:
+    """`storage_options` para pandas/s3fs (escritura de Parquet a MinIO)."""
+    return {
+        "key": MINIO_ACCESS_KEY,
+        "secret": MINIO_SECRET_KEY,
+        "client_kwargs": {"endpoint_url": MINIO_ENDPOINT},
+    }
+
 
 def cdr_engine():
     """Motor de SOLO LECTURA al CDR de Asterisk (latin1 → UTF-8)."""

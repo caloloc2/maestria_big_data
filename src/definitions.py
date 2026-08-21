@@ -23,7 +23,12 @@ from pyspark.sql import functions as F
 
 from src.processing.audio_index import build_audio_scope
 from src.processing.cdr import read_cdr
-from src.processing.config import DATA_DIR
+from src.processing.config import (
+    BRONCE_BUCKET,
+    DATA_DIR,
+    PLATA_BUCKET,
+    s3_storage_options,
+)
 from src.processing.linkage import link_calls
 from src.processing.serving import replace_day
 from src.processing.spark_session import get_spark
@@ -35,10 +40,13 @@ daily = DailyPartitionsDefinition(start_date="2025-05-01", end_date="2025-06-01"
 
 
 def _paths(day: str):
+    # Zonas Bronce/Plata en el lago MinIO. pandas/s3fs escribe con esquema `s3://`;
+    # Spark lee/escribe el mismo objeto vía `s3a://`.
     return {
-        "cdr": os.path.join(DATA_DIR, "bronze", "cdr", f"date={day}", "part.parquet"),
-        "audio": os.path.join(DATA_DIR, "bronze", "audio_index"),
-        "silver": os.path.join(DATA_DIR, "silver", "calls", f"date={day}"),
+        "cdr_write": f"s3://{BRONCE_BUCKET}/cdr/date={day}/part.parquet",
+        "cdr": f"s3a://{BRONCE_BUCKET}/cdr/date={day}/part.parquet",
+        "audio": f"s3a://{BRONCE_BUCKET}/audio_index",
+        "silver": f"s3a://{PLATA_BUCKET}/calls/date={day}",
     }
 
 
@@ -49,12 +57,15 @@ def bronze_cdr(context: AssetExecutionContext) -> MaterializeResult:
     day = context.partition_key
     d1 = (datetime.strptime(day, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
     df = read_cdr(f"{day} 00:00:00", f"{d1} 00:00:00")
-    out = _paths(day)["cdr"]
-    os.makedirs(os.path.dirname(out), exist_ok=True)
+    p = _paths(day)
     # Spark 3.5 no lee timestamps en nanosegundos → escribir en microsegundos.
-    df.to_parquet(out, index=False, coerce_timestamps="us", allow_truncated_timestamps=True)
-    context.log.info(f"bronze_cdr {day}: {len(df):,} filas → {out}")
-    return MaterializeResult(metadata={"filas_cdr": len(df), "ruta": MetadataValue.path(out)})
+    # Escritura directa al lago MinIO vía s3fs (storage_options).
+    df.to_parquet(
+        p["cdr_write"], index=False, coerce_timestamps="us",
+        allow_truncated_timestamps=True, storage_options=s3_storage_options(),
+    )
+    context.log.info(f"bronze_cdr {day}: {len(df):,} filas → {p['cdr']}")
+    return MaterializeResult(metadata={"filas_cdr": len(df), "ruta": MetadataValue.path(p["cdr"])})
 
 
 @asset(group_name=BRONCE,

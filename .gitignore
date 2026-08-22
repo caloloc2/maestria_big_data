@@ -27,6 +27,11 @@
 !/tests/
 !/docs/
 
+# 2b-bis) Marco legal LOPDP — se versiona el Markdown (referencia para la tesis),
+# NO los PDF fuente (pesados y redundantes con el .md; la ley es pública).
+!/lopd/
+/lopd/*.pdf
+
 # 2c) Datos y artefactos locales — NUNCA se versionan (crudos, PII, pesados)
 /data/
 **/__pycache__/

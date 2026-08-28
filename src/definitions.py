@@ -155,8 +155,10 @@ def silver_calls(context: AssetExecutionContext) -> MaterializeResult:
 
 
 # ─────────────── Zonas Plata/Oro — esqueleto (Fases 3, 4, 6) ───────────────
-@asset(partitions_def=daily, group_name=PLATA, deps=[silver_calls],
-       description="Transcripciones anonimizadas: encola asr.jobs → worker Whisper → asr.results.")
+@asset(partitions_def=daily, group_name=PLATA, deps=[silver_calls, bronze_audio],
+       description="Transcripciones anonimizadas: encola asr.jobs → worker Whisper → asr.results. "
+                   "Depende de bronze_audio: espera a que TODO el MP3 del día esté en Bronce "
+                   "antes de encolar (si no, en día completo transcribiría solo lo aterrizado).")
 def silver_transcriptions(context: AssetExecutionContext) -> MaterializeResult:
     import json
     import time

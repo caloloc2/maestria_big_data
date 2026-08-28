@@ -314,6 +314,99 @@ def gold_evaluations(context: AssetExecutionContext) -> MaterializeResult:
     })
 
 
+@asset(group_name=PLATA,
+       description="Diarización DIFERIDA (Fase 5): re-procesa las llamadas marcadas "
+                   "requiere_diarizacion → turnos ASESOR/CLIENTE con el worker (GPU). "
+                   "APAGADO por defecto; se activa con DIARIZATION_ENABLED=1 cuando haya "
+                   "GPU NVIDIA. No es requisito de ningún paso posterior (es una mejora).")
+def gold_diarizations(context: AssetExecutionContext) -> MaterializeResult:
+    import json
+    import time
+
+    from confluent_kafka import Consumer, Producer
+
+    from src.processing.serving import pendientes_diarizacion, set_diarizado
+
+    # Interruptor: diarización diferida DESHABILITADA por defecto (pyannote en CPU es el
+    # cuello de botella). Se activa cuando exista una GPU NVIDIA que la haga fluir.
+    if os.getenv("DIARIZATION_ENABLED", "0") != "1":
+        pend = pendientes_diarizacion(None)
+        context.log.info("gold_diarizations: DESHABILITADO (DIARIZATION_ENABLED!=1). "
+                         f"Backlog en espera={len(pend)}. No se procesa nada.")
+        return MaterializeResult(metadata={
+            "estado": "deshabilitado",
+            "pendientes_en_cola": len(pend),
+            "nota": MetadataValue.text("Activar con DIARIZATION_ENABLED=1 (idealmente en "
+                                       "un nodo con GPU NVIDIA) para procesar el backlog."),
+        })
+
+    limit = int(os.getenv("DIARIZATION_LIMIT", "0"))      # 0 = todo el backlog
+    timeout = int(os.getenv("DIARIZATION_TIMEOUT", "3600"))
+    boot = os.getenv("KAFKA_BOOTSTRAP_ASSET", "kafka:9092")
+
+    pend = pendientes_diarizacion(None)
+    if limit:
+        pend = pend[:limit]
+    if not pend:
+        context.log.info("gold_diarizations: sin llamadas pendientes de diarizar.")
+        return MaterializeResult(metadata={"diarizadas": 0, "pendientes": 0})
+
+    # 1) encolar re-diarización (diarize=true): el worker re-lee el MP3 de Bronce,
+    #    re-transcribe (barato en GPU) y diariza con pyannote → turnos ASESOR/CLIENTE.
+    info = {p["call_id"]: p for p in pend}
+    prod = Producer({"bootstrap.servers": boot})
+    for p in pend:
+        prod.produce("asr.jobs", json.dumps({
+            "call_id": p["call_id"], "audio_path": p["audio_path"], "diarize": True,
+        }).encode("utf-8"))
+    prod.flush(15)
+    context.log.info(f"gold_diarizations: {len(info)} jobs de diarización encolados; "
+                     f"esperando worker (GPU)...")
+
+    # 2) drenar resultados y actualizar filas (grupo propio → re-lee desde el inicio)
+    cons = Consumer({
+        "bootstrap.servers": boot,
+        "group.id": f"asset-diar-{int(time.time())}",
+        "auto.offset.reset": "earliest",
+        "enable.auto.commit": True,
+    })
+    cons.subscribe(["asr.results"])
+    hechas = fallidas = 0
+    vistos: set = set()
+    t0 = time.time()
+    while len(vistos) < len(info) and time.time() - t0 < timeout:
+        m = cons.poll(2.0)
+        if m is None or m.error():
+            continue
+        d = json.loads(m.value())
+        cid = d.get("call_id")
+        if cid not in info or cid in vistos:
+            continue
+        vistos.add(cid)
+        if d.get("estado") != "ok":
+            fallidas += 1
+            context.log.warning(f"  diarización falló call={cid}: {d.get('error')}")
+            continue
+        n_spk = d.get("meta", {}).get("n_hablantes")
+        if n_spk is None:
+            # el worker no llegó a diarizar (sin token/turnos) → se deja PENDIENTE.
+            fallidas += 1
+            context.log.warning(f"  call={cid}: worker devolvió sin diarizar "
+                                f"(n_hablantes=None); se mantiene pendiente.")
+            continue
+        set_diarizado(cid, d.get("transcript_anon") or "", n_spk)
+        hechas += 1
+        context.log.info(f"  diarizada call={cid} hablantes={n_spk}")
+    cons.close()
+
+    context.log.info(f"gold_diarizations: diarizadas={hechas} fallidas={fallidas} "
+                     f"sin_respuesta={len(info) - len(vistos)} de {len(info)}")
+    return MaterializeResult(metadata={
+        "encoladas": len(info), "diarizadas": hechas, "fallidas": fallidas,
+        "sin_respuesta": len(info) - len(vistos),
+    })
+
+
 @asset(partitions_def=daily, group_name=ORO, deps=[gold_evaluations],
        description="KPIs y anomalías por agente/periodo + intentos por contacto. Fase 6.")
 def gold_kpis(context: AssetExecutionContext) -> MaterializeResult:
@@ -329,6 +422,7 @@ defs = Definitions(
         silver_calls,
         silver_transcriptions,
         gold_evaluations,
+        gold_diarizations,
         gold_kpis,
     ]
 )

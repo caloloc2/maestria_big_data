@@ -52,6 +52,8 @@ DDL_TR = [
     # para diarizarlas después con GPU (pyannote en CPU es el cuello de botella).
     "ALTER TABLE servido.transcripciones ADD COLUMN IF NOT EXISTS requiere_diarizacion boolean DEFAULT false",
     "ALTER TABLE servido.transcripciones ADD COLUMN IF NOT EXISTS diarizado boolean DEFAULT false",
+    # Nº de hablantes detectados por pyannote cuando la diarización diferida se ejecuta.
+    "ALTER TABLE servido.transcripciones ADD COLUMN IF NOT EXISTS n_hablantes integer",
 ]
 
 DDL_EV = [
@@ -182,6 +184,47 @@ def replace_transcripciones(pdf: pd.DataFrame, fecha: str) -> None:
         con.execute(text("DELETE FROM servido.transcripciones WHERE fecha = :f"), {"f": fecha})
     if len(pdf):
         pdf.to_sql("transcripciones", eng, schema="servido", if_exists="append", index=False)
+    eng.dispose()
+
+
+def pendientes_diarizacion(dia: str | None = None) -> list[dict]:
+    """Llamadas transcritas marcadas para diarización DIFERIDA (Fase 5).
+
+    Une el marcador de `servido.transcripciones` con `servido.llamadas` para obtener
+    la clave del MP3 crudo en Bronce/MinIO (necesaria para re-procesar). Si `dia` es
+    None, devuelve TODO el backlog pendiente; si se indica, solo ese día.
+    """
+    ensure_schema_tr()
+    q = (
+        "SELECT DISTINCT t.call_id, t.fecha, t.agente, l.audio_path "
+        "FROM servido.transcripciones t "
+        "JOIN servido.llamadas l ON l.call_id = t.call_id "
+        "WHERE t.requiere_diarizacion AND NOT t.diarizado"
+    )
+    params: dict = {}
+    if dia is not None:
+        q += " AND t.fecha = :f"
+        params["f"] = dia
+    q += " ORDER BY t.fecha, t.call_id"
+    eng = pg_engine()
+    with eng.connect() as con:
+        rows = [dict(r._mapping) for r in con.execute(text(q), params)]
+    eng.dispose()
+    return rows
+
+
+def set_diarizado(call_id: str, transcript_anon: str, n_hablantes: int | None) -> None:
+    """Marca una transcripción como diarizada y reemplaza su texto por la versión con
+    turnos ASESOR/CLIENTE. UPDATE puntual (conserva el resto de la fila)."""
+    ensure_schema_tr()
+    eng = pg_engine()
+    with eng.begin() as con:
+        con.execute(text(
+            "UPDATE servido.transcripciones "
+            "SET transcript_anon = :t, n_hablantes = :n, "
+            "    diarizado = true, requiere_diarizacion = false "
+            "WHERE call_id = :c"
+        ), {"t": transcript_anon, "n": n_hablantes, "c": call_id})
     eng.dispose()
 
 

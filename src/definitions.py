@@ -34,8 +34,11 @@ from src.processing.spark_session import get_spark
 
 BRONCE, PLATA, ORO = "bronce", "plata", "oro"
 
-# Alcance de desarrollo/validación: mayo 2025 (mes validado al 100 % en Fase 1).
-daily = DailyPartitionsDefinition(start_date="2025-05-01", end_date="2025-06-01")
+# Calendario COMPLETO del histórico para reproceso por fechas (bloques a demanda):
+# cualquier día/rango es materializable. Sin `end_date` → se extiende hasta hoy.
+# El índice `bronze_audio_index` cubre ≈2020→2026; 2018–2019 es incierto (CDR podría
+# venir vacío), pero se deja mapeado y se verifica al reprocesar esos años.
+daily = DailyPartitionsDefinition(start_date="2018-01-01")
 
 
 def _paths(day: str):
@@ -271,19 +274,31 @@ def gold_evaluations(context: AssetExecutionContext) -> MaterializeResult:
     day = context.partition_key
     limit = int(os.getenv("EVAL_LIMIT", "0"))       # 0 = todas
     delay = float(os.getenv("EVAL_DELAY", "1.5"))   # respeta rate limit de Gemini
+    # Filtro de duración (mismo criterio que en streaming): SOLO se evalúan en Gemini
+    # las grabaciones que superan el umbral; las más cortas ya quedaron transcritas y
+    # anonimizadas, pero NO se mandan al LLM (ahorro de tokens).
+    eval_min = int(os.getenv("EVAL_MIN_SECS", "600"))   # 10 min
 
     eng = pg_engine()
     df = pd.read_sql(
-        sqltext("SELECT call_id, agente, transcript_anon FROM servido.transcripciones "
-                "WHERE fecha = :f"),
+        sqltext("SELECT call_id, agente, dur_audio, transcript_anon "
+                "FROM servido.transcripciones WHERE fecha = :f"),
         eng, params={"f": day},
     )
     eng.dispose()
-    if limit:
-        df = df.head(limit)
     if not len(df):
         context.log.warning(f"gold_evaluations {day}: sin transcripciones.")
         return MaterializeResult(metadata={"evaluadas": 0})
+    total = len(df)
+    df["dur_audio"] = df["dur_audio"].fillna(0)
+    df = df[df["dur_audio"] > eval_min]
+    omitidas_cortas = total - len(df)
+    if limit:
+        df = df.head(limit)
+    if not len(df):
+        context.log.info(f"gold_evaluations {day}: {omitidas_cortas} cortas "
+                         f"(<= {eval_min}s) sin evaluar; nada que enviar a Gemini.")
+        return MaterializeResult(metadata={"evaluadas": 0, "omitidas_cortas": omitidas_cortas})
 
     rows, fallidas = [], 0
     for _, r in df.iterrows():
@@ -309,7 +324,7 @@ def gold_evaluations(context: AssetExecutionContext) -> MaterializeResult:
     context.log.info(f"gold_evaluations {day}: evaluadas={len(rows)} fallidas={fallidas} "
                      f"venta_valida={validas}")
     return MaterializeResult(metadata={
-        "evaluadas": len(rows), "fallidas": fallidas,
+        "evaluadas": len(rows), "fallidas": fallidas, "omitidas_cortas": omitidas_cortas,
         "ventas_validas": validas, "criticas": len(rows) - validas,
     })
 

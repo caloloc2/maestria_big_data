@@ -193,9 +193,9 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       BRONCE_BUCKET: bronce
       PLATA_BUCKET: plata
-      # Reglas de negocio validadas (2026-08-27): solo se evalúa en Gemini la grabación
-      # > 300 s; diarización DIFERIDA (se marca la llamada larga, no se diariza en línea).
-      STREAM_EVAL_MIN_SECS: "300"
+      # Reglas de negocio: solo se evalúa en Gemini la grabación > 600 s (10 min);
+      # diarización DIFERIDA (se marca la llamada larga, no se diariza en línea).
+      STREAM_EVAL_MIN_SECS: "600"
       STREAM_DIARIZE_MODE: defer
     volumes:
       - ../src:/opt/dagster/app/src

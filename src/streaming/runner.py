@@ -52,7 +52,7 @@ DO_EVAL = os.getenv("STREAM_EVAL", "1") == "1"
 # Umbral de duración para el envío a Gemini: SOLO se evalúan (gastan tokens) las
 # llamadas cuya grabación supera este valor. Las más cortas se transcriben, diarizan
 # y anonimizan igual, pero NO se mandan al LLM (ahorro de tokens; decisión del tesista).
-EVAL_MIN_SECS = int(os.getenv("STREAM_EVAL_MIN_SECS", "300"))  # 5 min
+EVAL_MIN_SECS = int(os.getenv("STREAM_EVAL_MIN_SECS", "600"))  # 10 min
 LAND_SLEEP = float(os.getenv("AUDIO_LAND_SLEEP", "0.02"))
 TOL = int(os.getenv("STREAM_LOCATE_TOL", "8"))
 

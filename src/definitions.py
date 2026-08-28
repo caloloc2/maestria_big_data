@@ -198,11 +198,13 @@ def silver_transcriptions(context: AssetExecutionContext) -> MaterializeResult:
     if en_lago:
         origen = "minio"
         df["src_path"] = df["base"].map(en_lago.get)
-        df = df[df["src_path"].notna()].head(limit)
+        df = df[df["src_path"].notna()]
     else:
         origen = "local"
         df["ok"] = df["base"].map(lambda b: os.path.exists(os.path.join(audios_dir, b)))
-        df = df[df["ok"]].head(limit)
+        df = df[df["ok"]]
+    if limit:                    # ASR_LIMIT=0 → TODAS (head(0) devolvería 0 filas)
+        df = df.head(limit)
         df["src_path"] = df["base"].map(lambda b: f"data/muestra/audios/{b}")
     if not len(df):
         context.log.warning(f"silver_transcriptions {day}: sin audios disponibles "

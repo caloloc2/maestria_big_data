@@ -40,17 +40,25 @@ Se producen tres etiquetas por llamada:
 El peso refleja qué tan confiable es cada señal (una palabra prohibida pesa más que una
 pista débil). **Estos pesos son el primer punto a calibrar con Auditoría.**
 
-## 3. Resultados preliminares (534 llamadas ya transcritas)
+## 3. Resultados (1 420 llamadas transcritas, incluye el día completo 2026-08-06)
 
 | Etiqueta | Distribución |
 |----------|--------------|
-| `wl_es_venta` | 454 no · 13 sí · 67 sin señal |
-| `wl_infraccion_critica` | **527 crítica** · 7 no |
-| `wl_venta_valida` | 533 no · 1 sí |
-| confianza media | 0,48 |
+| `wl_es_venta` | 1 142 no · 28 sí · resto sin señal |
+| `wl_infraccion_critica` | **1 409 crítica** · 11 no |
+| `wl_venta_valida` | 1 419 no · 1 sí |
+| confianza media | 0,46 |
 
-Acuerdo con la evaluación de Gemini (en las 40 llamadas que ya tienen evaluación):
-**infracción crítica 98 % · venta válida 98 %**.
+Acuerdo con la evaluación de Gemini (68 llamadas evaluadas): **infracción crítica 99 % ·
+venta válida 99 %**.
+
+**Del día completo 2026-08-06** (886 llamadas): Gemini identificó **3 ventas** (`es_venta=1`)
+—el caso discriminante que buscábamos—, pero **0 quedaron como venta válida**: las tres
+fueron anuladas por infracción crítica (de nuevo A03/A07). Esto refuerza el hallazgo de §4.
+
+> Nota de rendimiento: el reproceso del día completo (4 378 grabaciones cruzadas, 886 en
+> muestra) tardó ≈ 15 min de aterrizaje+cruce y ≈ 1 h 32 min de transcripción en una sola
+> GPU sin diarizar (≈ 1 h 50 min en total). Cabe de sobra en una ventana valle nocturna.
 
 ## 4. Lectura de los resultados (el hallazgo importante)
 

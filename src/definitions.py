@@ -174,12 +174,14 @@ def silver_transcriptions(context: AssetExecutionContext) -> MaterializeResult:
     limit = int(os.getenv("ASR_LIMIT", "60"))
     timeout = int(os.getenv("ASR_TIMEOUT", "1800"))
     boot = os.getenv("KAFKA_BOOTSTRAP_ASSET", "kafka:9092")
+    # Umbral para marcar una llamada como "larga" → diarización DIFERIDA (gold_diarizations).
+    diarize_min = int(os.getenv("DIARIZE_MIN_SECS", "600"))
     audios_dir = os.path.join(DATA_DIR, "muestra", "audios")
 
     # 1) muestra del día
     eng = pg_engine()
     df = pd.read_sql(
-        sqltext("SELECT call_id, audio_path, agente FROM servido.llamadas "
+        sqltext("SELECT call_id, audio_path, agente, billsec FROM servido.llamadas "
                 "WHERE fecha = :f AND en_muestra"),
         eng, params={"f": day},
     )
@@ -207,11 +209,14 @@ def silver_transcriptions(context: AssetExecutionContext) -> MaterializeResult:
 
     # 2) encolar trabajos (el worker resuelve claves de MinIO o rutas locales)
     agente_de = dict(zip(df["call_id"], df["agente"]))
+    billsec_de = dict(zip(df["call_id"], df["billsec"]))
     prod = Producer({"bootstrap.servers": boot})
     ids = set()
     for _, r in df.iterrows():
         prod.produce("asr.jobs", json.dumps(
-            {"call_id": r["call_id"], "audio_path": r["src_path"]}
+            # Diarización DIFERIDA: batch NUNCA diariza en línea (pyannote en CPU es el
+            # cuello). Se transcribe plano; las largas se marcan para gold_diarizations.
+            {"call_id": r["call_id"], "audio_path": r["src_path"], "diarize": False}
         ).encode("utf-8"))
         ids.add(r["call_id"])
     prod.flush(15)
@@ -242,11 +247,17 @@ def silver_transcriptions(context: AssetExecutionContext) -> MaterializeResult:
         d = got.get(cid)
         if d and d.get("estado") == "ok":
             me = d.get("meta", {})
+            # Diarización diferida: como batch transcribe plano, la larga queda MARCADA
+            # para diarizarla luego con GPU (gold_diarizations). Mismo criterio que streaming.
+            diarizado = me.get("n_hablantes") is not None
+            dur = me.get("dur_audio") or billsec_de.get(cid) or 0
+            requiere_diar = (dur >= diarize_min) and not diarizado
             rows.append({
                 "call_id": cid, "fecha": day, "agente": agente_de.get(cid),
                 "dur_audio": me.get("dur_audio"), "proc_seg": me.get("proc_seg"),
                 "device": me.get("device"), "chunks_descartados": me.get("chunks_descartados"),
                 "chars": me.get("chars"), "transcript_anon": d.get("transcript_anon"),
+                "requiere_diarizacion": requiere_diar, "diarizado": diarizado,
             })
     replace_transcripciones(pd.DataFrame(rows), day)
     context.log.info(f"silver_transcriptions {day}: transcritas={len(rows)} de {len(ids)}")

@@ -21,7 +21,9 @@ TOPIC_IN = os.getenv("ASR_JOBS_TOPIC", "asr.jobs")
 TOPIC_OUT = os.getenv("ASR_RESULTS_TOPIC", "asr.results")
 GROUP_ID = os.getenv("ASR_GROUP", "whisper-worker")
 MAX_MSGS = int(os.getenv("MAX_MSGS", "0"))
-DIARIZE = os.getenv("DIARIZE", "1") == "1"
+# Diarización APAGADA por defecto: pyannote en CPU es el cuello de botella. Solo se
+# diariza si el JOB lo pide explícitamente (diarize=true → gold_diarizations con GPU).
+DIARIZE = os.getenv("DIARIZE", "0") == "1"
 
 _running = True
 

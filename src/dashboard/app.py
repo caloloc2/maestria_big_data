@@ -8,6 +8,7 @@ resumen, tiempo real (streaming), desempeño por agente, calidad y cumplimiento
 Se alimenta indistintamente del pipeline batch (reproceso por fechas) y del streaming
 near-real-time (columna `origen`). No accede a Asterisk: solo a nuestro PostgreSQL.
 """
+import json
 import os
 
 import altair as alt
@@ -82,7 +83,8 @@ if origen_sel != "todos":
 W = " AND ".join(cond)
 
 tabs = st.tabs(["Resumen", "⚡ Tiempo real", "👤 Por agente",
-                "⚖️ Calidad y cumplimiento", "🔁 Intentos", "🚨 Anomalías"])
+                "⚖️ Calidad y cumplimiento", "🔁 Intentos", "🚨 Anomalías",
+                "🔎 Detalle de llamada"])
 
 # ──────────────────────────────── Resumen ────────────────────────────────
 with tabs[0]:
@@ -275,6 +277,125 @@ with tabs[5]:
             st.info("Se necesitan ≥3 agentes con evaluaciones para el contraste de grupo.")
     else:
         st.info("Aún no hay evaluaciones.")
+
+# ─────────────────────────── Detalle de llamada ───────────────────────────
+with tabs[6]:
+    st.subheader("🔎 Detalle de llamada — transcripción y evaluación")
+    st.caption("Explora TODAS las llamadas transcritas del filtro. Si la llamada tiene "
+               "evaluación de Gemini (>10 min), se muestran sus métricas y el porqué de la "
+               "calificación; si no, solo la transcripción anonimizada.")
+    if not tabla_existe("transcripciones"):
+        st.info("Aún no hay transcripciones.")
+    else:
+        tiene_ev = tabla_existe("evaluaciones")
+        # WHERE cualificado (join con llamadas → columnas ambiguas hay que prefijarlas).
+        cond_d = ["l.fecha BETWEEN :di AND :dfin"]
+        if ag_sel:
+            cond_d.append("l.agente = ANY(:ags)")
+        if origen_sel != "todos":
+            cond_d.append("l.origen = :org")
+        Wd = " AND ".join(cond_d)
+
+        sel_cols = ("t.call_id, l.fecha, l.agente, l.telefono, l.origen, "
+                    "round(t.dur_audio) dur_s")
+        join_ev = ""
+        if tiene_ev:
+            sel_cols += (", e.calidad_score, e.es_venta, e.venta_valida, "
+                         "e.infraccion_critica, e.riesgo_reclamo")
+            join_ev = "LEFT JOIN servido.evaluaciones e ON e.call_id = t.call_id"
+        lst = q(f"""SELECT DISTINCT ON (t.call_id) {sel_cols}
+                    FROM servido.transcripciones t
+                    JOIN servido.llamadas l ON l.call_id = t.call_id
+                    {join_ev}
+                    WHERE {Wd} ORDER BY t.call_id""", par)
+
+        if not len(lst):
+            st.info("Sin transcripciones en el filtro actual.")
+        else:
+            df = lst.copy()
+            fc = st.columns(3)
+            solo_ev = fc[0].checkbox("Solo con evaluación", value=False)
+            solo_riesgo = fc[1].checkbox("Solo riesgo alto", value=False)
+            solo_crit = fc[2].checkbox("Solo infracción crítica", value=False)
+            if tiene_ev:
+                if solo_ev:
+                    df = df[df["calidad_score"].notna()]
+                if solo_riesgo:
+                    df = df[df["riesgo_reclamo"] == "alto"]
+                if solo_crit:
+                    df = df[df["infraccion_critica"] == True]  # noqa: E712
+                # ordenar: críticas y alto riesgo primero
+                df["_ord"] = (df["infraccion_critica"].fillna(False).astype(int) * 2
+                              + (df["riesgo_reclamo"] == "alto").astype(int))
+                df = df.sort_values(["_ord", "fecha"], ascending=[False, False]) \
+                       .drop(columns="_ord")
+            df = df.head(500)
+
+            if not len(df):
+                st.info("Ninguna llamada cumple los filtros marcados.")
+            else:
+                st.caption(f"{len(df)} llamada(s) — ordenadas por criticidad.")
+
+                def _etq(r):
+                    tag = ""
+                    if tiene_ev and bool(r.get("infraccion_critica")):
+                        tag = " ⛔ CRÍTICA"
+                    elif tiene_ev and r.get("riesgo_reclamo") == "alto":
+                        tag = " ⚠️ alto"
+                    return f"{r['call_id']} · ag {r['agente']} · {int(r['dur_s'] or 0)}s{tag}"
+
+                opciones = {_etq(r): r["call_id"] for _, r in df.iterrows()}
+                sel = st.selectbox("Elige una llamada", list(opciones.keys()))
+                cid = opciones[sel]
+
+                tr = q("SELECT transcript_anon, dur_audio, device, chars, "
+                       "requiere_diarizacion, diarizado, n_hablantes "
+                       "FROM servido.transcripciones WHERE call_id=:c LIMIT 1", {"c": cid})
+                ev = q("SELECT * FROM servido.evaluaciones WHERE call_id=:c LIMIT 1",
+                       {"c": cid}) if tiene_ev else pd.DataFrame()
+
+                if len(ev):
+                    e0 = ev.iloc[0]
+                    if bool(e0["infraccion_critica"]):
+                        st.error(f"⛔ Infracción crítica · riesgo de reclamo: "
+                                 f"{e0['riesgo_reclamo'] or '—'}")
+                    elif e0["riesgo_reclamo"] == "alto":
+                        st.warning("⚠️ Riesgo de reclamo ALTO")
+                    m = st.columns(4)
+                    m[0].metric("Calidad", e0["calidad_score"])
+                    m[1].metric("¿Es venta?", "Sí" if e0["es_venta"] else "No")
+                    m[2].metric("Venta válida", "Sí" if e0["venta_valida"] else "No")
+                    m[3].metric("Riesgo reclamo", e0["riesgo_reclamo"] or "—")
+                    if e0.get("grupo_b"):
+                        st.markdown(f"**Infracciones (grupo B):** {e0['grupo_b']}")
+                    if e0.get("grupo_c"):
+                        st.markdown(f"**Omisiones (grupo C):** {e0['grupo_c']}")
+                    st.markdown(f"**Sentimiento asesor:** {e0.get('sentimiento_asesor') or '—'}  ·  "
+                                f"**Cliente (trayectoria):** {e0.get('sentimiento_cliente') or '—'}")
+                    try:
+                        ga = json.loads(e0["grupo_a"]) if e0.get("grupo_a") else {}
+                    except Exception:  # noqa: BLE001
+                        ga = {}
+                    if ga:
+                        with st.expander("Ítems evaluados (grupo A)"):
+                            st.json(ga)
+                    st.caption(f"Modelo: {e0.get('modelo') or '—'} · "
+                               f"confianza LLM: {e0.get('confianza_llm') or '—'}")
+                else:
+                    st.info("Sin evaluación de Gemini para esta llamada (≤10 min o no "
+                            "evaluada). Se muestra solo la transcripción anonimizada.")
+
+                if len(tr):
+                    t0 = tr.iloc[0]
+                    meta = (f"dur {int(t0['dur_audio'] or 0)}s · {t0['device'] or '—'} · "
+                            f"{int(t0['chars'] or 0)} caracteres")
+                    if bool(t0.get("diarizado")):
+                        meta += f" · diarizada ({t0.get('n_hablantes')} hablantes)"
+                    elif bool(t0.get("requiere_diarizacion")):
+                        meta += " · pendiente de diarizar (GPU)"
+                    st.caption(meta)
+                    st.text_area("Transcripción anonimizada", t0["transcript_anon"] or "",
+                                 height=420)
 
 st.divider()
 st.caption("Fase 7 · UISRAEL · datos servidos desde PostgreSQL (batch + streaming). "

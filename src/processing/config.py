@@ -65,6 +65,31 @@ def cdr_engine():
     return create_engine(f"mysql+pymysql://{u}:{pw}@{h}:{pt}/{db}?charset={ch}", pool_pre_ping=True)
 
 
+def cdr_jdbc() -> tuple[str, dict]:
+    """URL y propiedades JDBC (MariaDB) para la lectura particionada del CDR con Spark.
+
+    ESTRICTAMENTE SOLO LECTURA: se usa el usuario `lectura` (privilegios de solo lectura
+    en la fuente) y Spark solo emite consultas SELECT. Nunca se escribe en Asterisk.
+    """
+    u = os.environ["CDR_USER"]
+    pw = os.environ["CDR_PASSWORD"]
+    h = os.environ["CDR_HOST"]
+    pt = os.getenv("CDR_PORT", "3306")
+    db = os.environ["CDR_DB"]
+    # Esquema `jdbc:mysql://` a propósito (no `jdbc:mariadb://`): así Spark selecciona el
+    # dialecto MySQL y entrecomilla los identificadores con backticks (`calldate`), no con
+    # comillas dobles (que MariaDB tomaría como literal de texto y rompería el particionado).
+    # El driver sigue siendo el de MariaDB 2.7.x (compatible con MariaDB 5.5.60), que acepta
+    # el esquema mysql con `permitMysqlScheme`.
+    url = f"jdbc:mysql://{h}:{pt}/{db}?permitMysqlScheme"
+    props = {
+        "user": u,
+        "password": pw,
+        "driver": "org.mariadb.jdbc.Driver",
+    }
+    return url, props
+
+
 def pg_engine():
     """Motor a la capa servida (PostgreSQL del stack)."""
     h = os.getenv("PG_HOST", "postgres")

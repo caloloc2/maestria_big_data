@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="a2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#334155"/></marker>
+    <style>
+      .t{font-size:12px; fill:#0f172a; font-weight:600;}
+      .s{font-size:10.5px; fill:#475569;}
+      .f{stroke:#334155; stroke-width:1.6; fill:none; marker-end:url(#a2);}
+      .step{font-size:12px; font-weight:700; fill:#ffffff;}
+    </style>
+  </defs>
+  <text x="480" y="30" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">Arquitectura Big Data implementada — Pasos A–D</text>
+
+  <!-- Fuente -->
+  <rect x="20" y="70" width="150" height="150" rx="10" fill="#fef2f2" stroke="#ef4444"/>
+  <text x="95" y="94" text-anchor="middle" class="t" fill="#b91c1c">Asterisk</text>
+  <text x="95" y="112" text-anchor="middle" class="s">CDR (MariaDB)</text>
+  <text x="95" y="128" text-anchor="middle" class="s">Grabaciones MP3</text>
+  <text x="95" y="150" text-anchor="middle" class="s" fill="#b91c1c">🔒 SOLO LECTURA</text>
+  <text x="95" y="170" text-anchor="middle" class="s">SELECT + SFTP read</text>
+
+  <!-- BRONCE -->
+  <rect x="220" y="60" width="210" height="410" rx="12" fill="#fffbeb" stroke="#d97706"/>
+  <text x="325" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#b45309">BRONCE (MinIO)</text>
+
+  <rect x="240" y="100" width="170" height="86" rx="8" fill="#f59e0b"/>
+  <text x="325" y="120" text-anchor="middle" class="step">PASO A</text>
+  <text x="325" y="140" text-anchor="middle" class="s" fill="#fff">bronze_cdr</text>
+  <text x="325" y="156" text-anchor="middle" class="s" fill="#fff">Spark JDBC particionado</text>
+  <text x="325" y="172" text-anchor="middle" class="s" fill="#fff">(antes pandas) → Parquet</text>
+
+  <rect x="240" y="200" width="170" height="86" rx="8" fill="#16a34a"/>
+  <text x="325" y="220" text-anchor="middle" class="step">PASO B</text>
+  <text x="325" y="240" text-anchor="middle" class="s" fill="#fff">bronze_audio</text>
+  <text x="325" y="256" text-anchor="middle" class="s" fill="#fff">MP3 crudo por SFTP</text>
+  <text x="325" y="272" text-anchor="middle" class="s" fill="#fff">idempotente (auditoría)</text>
+
+  <rect x="240" y="300" width="170" height="70" rx="8" fill="#ffffff" stroke="#d97706"/>
+  <text x="325" y="322" text-anchor="middle" class="s">bronze_audio_index</text>
+  <text x="325" y="340" text-anchor="middle" class="s">alcance 200–299 / OUT</text>
+  <text x="325" y="356" text-anchor="middle" class="s">7 061 447 grabaciones</text>
+
+  <!-- PLATA -->
+  <rect x="460" y="60" width="180" height="230" rx="12" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="550" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#1d4ed8">PLATA</text>
+  <rect x="478" y="100" width="144" height="70" rx="8" fill="#ffffff" stroke="#2563eb"/>
+  <text x="550" y="122" text-anchor="middle" class="s">silver_calls</text>
+  <text x="550" y="138" text-anchor="middle" class="s">cruce CDR↔grabación</text>
+  <text x="550" y="154" text-anchor="middle" class="s">cobertura 100 %</text>
+  <rect x="478" y="184" width="144" height="86" rx="8" fill="#ffffff" stroke="#2563eb"/>
+  <text x="550" y="206" text-anchor="middle" class="s">silver_transcriptions</text>
+  <text x="550" y="222" text-anchor="middle" class="s">Whisper + anonimización</text>
+  <text x="550" y="238" text-anchor="middle" class="s">lee MP3 del lago (Paso B)</text>
+  <text x="550" y="256" text-anchor="middle" class="s">solo texto anónimo → nube</text>
+
+  <!-- ORO -->
+  <rect x="670" y="60" width="170" height="230" rx="12" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="755" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#15803d">ORO (PostgreSQL)</text>
+  <rect x="686" y="100" width="140" height="80" rx="8" fill="#ffffff" stroke="#16a34a"/>
+  <text x="756" y="124" text-anchor="middle" class="s">gold_evaluations</text>
+  <text x="756" y="142" text-anchor="middle" class="s">rúbrica + Gemini</text>
+  <text x="756" y="160" text-anchor="middle" class="s">calidad, infracciones,</text>
+  <text x="756" y="174" text-anchor="middle" class="s">venta, sentimiento</text>
+  <rect x="686" y="196" width="140" height="74" rx="8" fill="#ffffff" stroke="#16a34a"/>
+  <text x="756" y="220" text-anchor="middle" class="s">servido.llamadas</text>
+  <text x="756" y="238" text-anchor="middle" class="s">transcripciones</text>
+  <text x="756" y="256" text-anchor="middle" class="s">evaluaciones</text>
+
+  <!-- PASO D dashboard -->
+  <rect x="670" y="320" width="270" height="70" rx="12" fill="#ecfeff" stroke="#06b6d4"/>
+  <text x="805" y="344" text-anchor="middle" class="step" fill="#0e7490">PASO D · Tablero (Streamlit)</text>
+  <text x="805" y="364" text-anchor="middle" class="s">6 vistas: resumen, tiempo real, agente,</text>
+  <text x="805" y="380" text-anchor="middle" class="s">calidad, intentos, anomalías</text>
+
+  <!-- PASO C streaming band -->
+  <rect x="20" y="410" width="620" height="100" rx="12" fill="#faf5ff" stroke="#9333ea"/>
+  <text x="330" y="434" text-anchor="middle" class="step" fill="#7e22ce">PASO C · Streaming near-real-time (runner)</text>
+  <text x="330" y="456" text-anchor="middle" class="s">poll CDR (read-only) → localiza grabación → aterriza en Bronce → Kafka → worker → capa servida</text>
+  <text x="330" y="476" text-anchor="middle" class="s">detecta llamadas de asesores en vivo · diariza solo largas · cursor en nuestro Postgres</text>
+  <text x="330" y="496" text-anchor="middle" class="s">reutiliza los MISMOS módulos del batch (misma lógica de limpieza/anonimización/evaluación)</text>
+
+  <!-- flows -->
+  <path class="f" d="M170 140 L236 140"/>
+  <path class="f" d="M170 175 L236 235"/>
+  <path class="f" d="M412 135 L474 135"/>
+  <path class="f" d="M412 240 L474 220"/>
+  <path class="f" d="M622 135 L682 135"/>
+  <path class="f" d="M622 225 L682 225"/>
+  <path class="f" d="M756 290 L790 316"/>
+  <path class="f" d="M640 455 L690 400" stroke="#9333ea"/>
+</svg>

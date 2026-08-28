@@ -23,12 +23,17 @@ RUN pip install --no-cache-dir -r /tmp/req.txt
 # no depender de internet en runtime (despliegue on-premise reproducible).
 ARG HADOOP_AWS=3.3.4
 ARG AWS_SDK_BUNDLE=1.12.262
+# Driver JDBC MariaDB: la 2.7.x es compatible con servidores antiguos (MariaDB 5.5.60,
+# la fuente Asterisk). Habilita la lectura particionada del CDR con Spark (SOLO LECTURA).
+ARG MARIADB_JDBC=2.7.12
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && SPARK_JARS="$(python -c 'import pyspark, os; print(os.path.join(os.path.dirname(pyspark.__file__), "jars"))')" \
     && curl -fsSL -o "$SPARK_JARS/hadoop-aws-${HADOOP_AWS}.jar" \
         "https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_AWS}/hadoop-aws-${HADOOP_AWS}.jar" \
     && curl -fsSL -o "$SPARK_JARS/aws-java-sdk-bundle-${AWS_SDK_BUNDLE}.jar" \
         "https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_BUNDLE}/aws-java-sdk-bundle-${AWS_SDK_BUNDLE}.jar" \
+    && curl -fsSL -o "$SPARK_JARS/mariadb-java-client-${MARIADB_JDBC}.jar" \
+        "https://repo1.maven.org/maven2/org/mariadb/jdbc/mariadb-java-client/${MARIADB_JDBC}/mariadb-java-client-${MARIADB_JDBC}.jar" \
     && rm -rf /var/lib/apt/lists/*
 
 # Configuración de almacenamiento de metadatos (apunta a PostgreSQL)

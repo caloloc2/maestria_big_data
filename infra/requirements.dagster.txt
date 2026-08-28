@@ -15,3 +15,4 @@ python-dotenv==1.0.1
 confluent-kafka==2.5.3   # encolar asr.jobs / leer asr.results (Fase 3)
 google-generativeai==0.8.3  # análisis de calidad con Gemini (Fase 4)
 s3fs==2024.9.0           # escritura de Parquet a MinIO desde pandas (bronze_cdr)
+paramiko==3.5.0          # SFTP SOLO LECTURA del audio crudo → Bronce (bronze_audio, streaming)

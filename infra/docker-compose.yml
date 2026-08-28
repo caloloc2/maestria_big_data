@@ -171,6 +171,47 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  # Runner de streaming near-real-time (Fase 5) — SOLO LECTURA sobre Asterisk.
+  # Poll del CDR (SELECT) → localiza la grabación por SFTP (stat) → aterriza el MP3
+  # crudo en Bronce/MinIO → encola asr.jobs → drena asr.results → capa servida.
+  # Misma imagen que Dagster (trae confluent-kafka, paramiko, spark, etc.). Al vivir
+  # dentro de compose, `docker compose up/down` lo arranca y lo detiene con el resto.
+  # El worker Whisper NO va aquí: corre nativo en el host con GPU (ver scripts/worker-up.ps1).
+  streaming_runner:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.dagster
+    image: uisrael/dagster:dev
+    container_name: uisrael_streaming_runner
+    command: python -m src.streaming.runner
+    environment:
+      # Kafka interno de la red Docker (el worker del host usa localhost:29092).
+      KAFKA_BOOTSTRAP: kafka:9092
+      # Lago MinIO (aterrizaje del MP3 crudo en Bronce).
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      BRONCE_BUCKET: bronce
+      PLATA_BUCKET: plata
+      # Reglas de negocio validadas (2026-08-27): solo se evalúa en Gemini la grabación
+      # > 300 s; diarización DIFERIDA (se marca la llamada larga, no se diariza en línea).
+      STREAM_EVAL_MIN_SECS: "300"
+      STREAM_DIARIZE_MODE: defer
+    volumes:
+      - ../src:/opt/dagster/app/src
+      - ../.env:/opt/dagster/app/.env:ro
+      - ../data:/opt/dagster/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      kafka_init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   # Tablero (Streamlit) — placeholder Fase 0; se desarrolla en la Fase 7.
   dashboard:
     build:

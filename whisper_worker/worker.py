@@ -36,6 +36,7 @@ def main() -> int:
 
     import anonimizar
     import asr
+    import audio_source
 
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
@@ -45,6 +46,10 @@ def main() -> int:
         "group.id": GROUP_ID,
         "auto.offset.reset": "earliest",
         "enable.auto.commit": False,
+        # La transcripción + diarización de una llamada larga puede tardar varios minutos.
+        # Sin esto, Kafka expulsa al consumidor del grupo (MAXPOLL) y reprocesa en bucle.
+        # Se amplía el intervalo máximo de poll para procesamiento largo por mensaje.
+        "max.poll.interval.ms": 1800000,   # 30 min
     })
     producer = Producer({"bootstrap.servers": BOOTSTRAP})
     consumer.subscribe([TOPIC_IN])
@@ -66,16 +71,20 @@ def main() -> int:
         except Exception:  # noqa: BLE001
             job = {}
         call_id, path = job.get("call_id"), job.get("audio_path")
-        print(f"[worker] job call_id={call_id} audio={path}")
+        # Política por trabajo (streaming): diarizar solo llamadas relevantes/largas.
+        # Si el trabajo no trae 'diarize', se usa el default global DIARIZE.
+        do_diar = job.get("diarize", DIARIZE)
+        print(f"[worker] job call_id={call_id} audio={path} diarize={do_diar}")
 
         t0 = time.time()
         try:
-            tr = asr.transcribe(path, device=dev)
+            local_path = audio_source.resolver(path)   # descarga de MinIO si es clave S3
+            tr = asr.transcribe(local_path, device=dev)
             n_spk = None
-            if DIARIZE and tr["segments"]:
+            if do_diar and tr["segments"]:
                 try:
                     import diarizar
-                    segs, n_spk = diarizar.diarizar_segmentos(path, tr["segments"])
+                    segs, n_spk = diarizar.diarizar_segmentos(local_path, tr["segments"])
                     turnos = []
                     for s in segs:  # fusionar turnos consecutivos del mismo rol
                         if turnos and turnos[-1]["rol"] == s["rol"]:

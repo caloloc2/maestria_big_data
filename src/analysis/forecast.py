@@ -125,6 +125,63 @@ def _prophet(train: pd.Series, n: int, index: pd.DatetimeIndex):
     return _clip(fc["yhat"].values), _clip(fc["yhat_lower"].values), _clip(fc["yhat_upper"].values)
 
 
+def _lstm(train: pd.Series, n: int, index: pd.DatetimeIndex):
+    """Red neuronal LSTM univariante (PyTorch, CPU). Ventana de 28 días → 1 paso; el
+    horizonte se genera de forma recursiva. Banda = ±1.28·σ de los residuos in-sample.
+    Modelo de la familia 'aprendizaje profundo' para la comparación de Fase 8."""
+    import numpy as np
+    import torch
+    import torch.nn as nn
+
+    torch.manual_seed(0)
+    np.random.seed(0)
+    W = 28
+    y = train.values.astype("float32")
+    if len(y) <= W + 10:
+        raise ValueError("serie corta para LSTM")
+    ymin, rng = float(y.min()), float(y.max() - y.min()) or 1.0
+    ys = (y - ymin) / rng
+
+    X = np.stack([ys[i:i + W] for i in range(len(ys) - W)])
+    Y = ys[W:]
+    Xt = torch.tensor(X).unsqueeze(-1)      # (N, W, 1)
+    Yt = torch.tensor(Y).unsqueeze(-1)      # (N, 1)
+
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lstm = nn.LSTM(1, 32, batch_first=True)
+            self.fc = nn.Linear(32, 1)
+
+        def forward(self, x):
+            o, _ = self.lstm(x)
+            return self.fc(o[:, -1, :])
+
+    net = Net()
+    opt = torch.optim.Adam(net.parameters(), lr=0.01)
+    lossf = nn.MSELoss()
+    net.train()
+    for _ in range(120):
+        opt.zero_grad()
+        loss = lossf(net(Xt), Yt)
+        loss.backward()
+        opt.step()
+
+    net.eval()
+    with torch.no_grad():
+        fit = net(Xt).squeeze(-1).numpy()
+        resid = float(np.std((Y - fit) * rng))
+        seq = list(ys[-W:])
+        preds = []
+        for _ in range(n):
+            xin = torch.tensor(np.array(seq[-W:], dtype="float32")).reshape(1, W, 1)
+            p = float(net(xin).item())
+            preds.append(p)
+            seq.append(p)
+    fpred = np.array(preds) * rng + ymin
+    return _clip(fpred), _clip(fpred - 1.28 * resid), _clip(fpred + 1.28 * resid)
+
+
 def modelos_disponibles() -> dict:
     """Modelos a comparar. Prophet solo si está instalado (post-rebuild de la imagen)."""
     mods = {"baseline": _baseline, "holt_winters": _holt_winters, "sarima": _sarima}
@@ -133,6 +190,11 @@ def modelos_disponibles() -> dict:
         mods["prophet"] = _prophet
     except Exception:  # noqa: BLE001
         print("  (prophet no instalado: se omite; rebuild la imagen para habilitarlo)")
+    try:
+        import torch  # noqa: F401
+        mods["lstm"] = _lstm
+    except Exception:  # noqa: BLE001
+        print("  (torch no instalado: LSTM se omite; rebuild la imagen para habilitarlo)")
     return mods
 
 

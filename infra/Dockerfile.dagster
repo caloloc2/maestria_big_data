@@ -23,6 +23,10 @@ RUN pip install --no-cache-dir -r /tmp/req.txt
 # modelo no se recompila, basta crear el archivo vacío para pasar la validación.
 RUN find /usr/local/lib -type d -path '*prophet/stan_model/cmdstan-*' -exec touch {}/makefile \;
 
+# PyTorch CPU-only (LSTM comparativo, Fase 8). Índice específico para evitar el wheel CUDA
+# (~800MB); el CPU pesa ~190MB y basta para una LSTM univariante en CPU.
+RUN pip install --no-cache-dir torch==2.4.1 --index-url https://download.pytorch.org/whl/cpu
+
 # JARs de conectividad S3A (Hadoop AWS) para que Spark lea/escriba en MinIO (s3a://).
 # Versiones atadas a PySpark 3.5.3 (cliente Hadoop 3.3.4). Se hornean en la imagen para
 # no depender de internet en runtime (despliegue on-premise reproducible).

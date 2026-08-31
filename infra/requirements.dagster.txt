@@ -19,3 +19,4 @@ paramiko==3.5.0          # SFTP SOLO LECTURA del audio crudo → Bronce (bronze_
 statsmodels==0.15.0      # pronóstico de KPIs (Fase 7): SARIMA / Holt-Winters (comparación)
 scikit-learn==1.9.0      # métricas de pronóstico (MAE/RMSE/R²) y modelos ML (Fase 7/8)
 prophet==1.1.6           # pronóstico principal (Fase 7): tendencia + estacionalidad anual/semanal + changepoints
+# torch (CPU) se instala aparte en Dockerfile.dagster con el índice CPU (LSTM comparativo, Fase 8)

@@ -48,7 +48,7 @@ KPIS = {
     "contactabilidad": "mean",
     "dur_media": "mean",
 }
-HORIZON = int(os.environ.get("HORIZON", "120"))   # días a proyectar (~4 meses)
+HORIZON = int(os.environ.get("HORIZON", "210"))   # días a proyectar (~7 meses → cubre semestre)
 TEST = int(os.environ.get("TEST", "84"))           # días de holdout para backtest (12 sem)
 SEASONAL = 7                                        # estacionalidad semanal
 

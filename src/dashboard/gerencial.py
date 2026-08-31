@@ -49,7 +49,13 @@ if not tabla_existe("pronosticos_mensual"):
     st.stop()
 
 # ─────────────── selector de horizonte ───────────────
-HOR = {"Próximo mes": 1, "Próximo bimestre": 2, "Próximo trimestre": 3}
+# Paleta verde corporativa (base #9AC31C).
+VERDE = "#9AC31C"          # primario
+VERDE_OSC = "#4F6B0C"      # verde oscuro (línea histórica, texto acento)
+VERDE_PASTEL = "#CDE39A"   # franja / banda
+
+HOR = {"Próximo mes": 1, "Próximo bimestre": 2, "Próximo trimestre": 3,
+       "Próximo semestre": 6}
 c0, c1 = st.columns([2, 3])
 with c0:
     horizonte = st.radio("¿Qué periodo quieres proyectar?", list(HOR.keys()), horizontal=True)
@@ -179,17 +185,17 @@ kpi_g = st.selectbox("Ver la tendencia de:", list(etiq.keys()),
 hg, fg = serie_mensual(kpi_g)
 if len(hg):
     hg = hg.rename(columns={"val": "valor"}); hg["serie"] = "Real"
-    capas = [alt.Chart(hg).mark_line(point=True, color="#2E86DE").encode(
+    capas = [alt.Chart(hg).mark_line(point=True, color=VERDE_OSC).encode(
         x=alt.X("mes:T", title="Mes"), y=alt.Y("valor:Q", title=etiq[kpi_g]))]
     if len(fg):
         fg = fg.rename(columns={"val": "valor"})
-        banda = alt.Chart(fg).mark_area(opacity=0.18, color="#E67E22").encode(
+        banda = alt.Chart(fg).mark_area(opacity=0.35, color=VERDE_PASTEL).encode(
             x="mes:T", y=alt.Y("lo:Q", title=""), y2="hi:Q")
-        linea = alt.Chart(fg).mark_line(point=True, strokeDash=[6, 3], color="#E67E22").encode(
+        linea = alt.Chart(fg).mark_line(point=True, strokeDash=[6, 3], color=VERDE).encode(
             x="mes:T", y="valor:Q")
         capas = [banda] + capas + [linea]
     st.altair_chart(alt.layer(*capas).properties(height=340), use_container_width=True)
-    st.caption("Línea azul = lo ocurrido · línea naranja = proyección · "
+    st.caption("Línea verde oscuro = lo ocurrido · línea verde punteada = proyección · "
                "franja = escenario optimista / pesimista.")
 
 # ─────────────── tabla resumen ───────────────

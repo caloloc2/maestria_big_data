@@ -221,7 +221,7 @@ services:
       dockerfile: infra/Dockerfile.streamlit
     image: uisrael/streamlit:dev
     container_name: uisrael_dashboard
-    command: streamlit run src/dashboard/app.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true
+    command: streamlit run src/dashboard/app.py --server.address=0.0.0.0 --server.port=8501 --server.headless=true --theme.base=light --theme.primaryColor=#9AC31C --theme.backgroundColor=#FBFDF4 --theme.secondaryBackgroundColor=#EEF6D6 --theme.textColor=#2F3A12
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
@@ -245,7 +245,7 @@ services:
       dockerfile: infra/Dockerfile.streamlit
     image: uisrael/streamlit:dev
     container_name: uisrael_dashboard_gerencial
-    command: streamlit run src/dashboard/gerencial.py --server.address=0.0.0.0 --server.port=8502 --server.headless=true
+    command: streamlit run src/dashboard/gerencial.py --server.address=0.0.0.0 --server.port=8502 --server.headless=true --theme.base=light --theme.primaryColor=#9AC31C --theme.backgroundColor=#FBFDF4 --theme.secondaryBackgroundColor=#EEF6D6 --theme.textColor=#2F3A12
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"

@@ -185,6 +185,8 @@ services:
     container_name: uisrael_streaming_runner
     command: python -m src.streaming.runner
     environment:
+      # Log en tiempo real (sin búfer) para ver los ciclos en `docker logs`.
+      PYTHONUNBUFFERED: "1"
       # Kafka interno de la red Docker (el worker del host usa localhost:29092).
       KAFKA_BOOTSTRAP: kafka:9092
       # Lago MinIO (aterrizaje del MP3 crudo en Bronce).

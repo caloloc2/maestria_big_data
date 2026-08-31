@@ -42,7 +42,15 @@ Devuelve SOLO un JSON con estos campos:
 C04(nombre empresa),C05(descargo legal),C06(dijo "tipo de crédito").
 - sentimiento_asesor: bajo/neutral/positivo.
 - sentimiento_cliente_trayectoria: lista corta (apertura→cierre), p.ej. ["neutral","positivo"].
-- riesgo_reclamo: bajo/medio/alto.
+- impersona_banco (0/1): 1 SOLO si el asesor da a entender que llama DE PARTE del banco/Diners \
+o que ES el banco / una institución financiera, aunque no lo diga textual (ej. "le llamo por su \
+tarjeta/cupo Diners", "del club de beneficios del banco", se presenta como el banco). 0 si deja \
+claro que es Corporación Marketing Vip (empresa aliada, NO el banco) o si no menciona al banco así.
+- riesgo_reclamo (bajo/medio/alto): **alto** SOLO si hay impersonación del banco, promesa \
+engañosa clara (garantía falsa, "aprobado" sin condición, "sin riesgo") o cierre de venta sin \
+informar condiciones clave (costo real, seguro de desgravamen). **medio** si hay ambigüedad \
+relevante que podría confundir al cliente. **bajo** si la llamada fue transparente y sin promesas \
+indebidas (la mayoría de las llamadas deberían ser bajo).
 - confianza_llm: 0..1.
 
 Pistas de la capa determinista (palabras prohibidas ya detectadas): {pistas}
@@ -69,6 +77,12 @@ def evaluar(call_id: str, transcript_anon: str) -> Evaluacion:
     resp = modelo.generate_content(
         prompt, generation_config={"response_mime_type": "application/json", "temperature": 0}
     )
+    # Telemetría de costo: tokens reales de entrada/salida por llamada (para estimar $).
+    um = getattr(resp, "usage_metadata", None)
+    if um is not None:
+        print(f"[gemini-tokens] call={call_id} in={getattr(um, 'prompt_token_count', '?')} "
+              f"out={getattr(um, 'candidates_token_count', '?')} "
+              f"total={getattr(um, 'total_token_count', '?')} modelo={MODEL}", flush=True)
     data = json.loads(resp.text)
 
     ev = Evaluacion(
@@ -82,6 +96,7 @@ def evaluar(call_id: str, transcript_anon: str) -> Evaluacion:
         riesgo_reclamo=str(data.get("riesgo_reclamo", "bajo")),
         confianza_llm=float(data.get("confianza_llm", 0.0)),
         modelo=MODEL,
+        impersona_banco=int(data.get("impersona_banco", 0)),
     )
     if det["c05_omision_descargo"] and "C05" not in ev.grupo_C_omisiones:
         ev.grupo_C_omisiones.append("C05")

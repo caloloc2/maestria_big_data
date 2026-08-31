@@ -84,7 +84,7 @@ W = " AND ".join(cond)
 
 tabs = st.tabs(["Resumen", "⚡ Tiempo real", "👤 Por agente",
                 "⚖️ Calidad y cumplimiento", "🔁 Intentos", "🚨 Anomalías",
-                "🔎 Detalle de llamada"])
+                "🔎 Detalle de llamada", "📈 Predicción"])
 
 # ──────────────────────────────── Resumen ────────────────────────────────
 with tabs[0]:
@@ -396,6 +396,75 @@ with tabs[6]:
                     st.caption(meta)
                     st.text_area("Transcripción anonimizada", t0["transcript_anon"] or "",
                                  height=420)
+
+# ─────────────────────────────── Predicción ───────────────────────────────
+with tabs[7]:
+    st.subheader("📈 Analítica predictiva — pronóstico de KPIs operativos")
+    st.caption("Serie diaria del CDR modelada y proyectada a meses. Compara 4 modelos "
+               "(baseline, Holt-Winters, SARIMA, Prophet); se muestra el mejor por RMSE. "
+               "No depende del filtro lateral (visión gerencial global).")
+
+    if not tabla_existe("pronosticos_mensual"):
+        st.info("Aún no hay pronósticos. Materializa el activo `gold_pronosticos` "
+                "(o corre `python data/pronostico.py` en el contenedor dagster).")
+    else:
+        etiquetas = {"n_llamadas": "Volumen de llamadas", "n_contestadas": "Llamadas contestadas",
+                     "contactabilidad": "Contactabilidad (%)", "dur_media": "Duración media (s)"}
+        kpis_disp = q("SELECT DISTINCT kpi FROM servido.pronosticos_mensual ORDER BY kpi")["kpi"].tolist()
+        kpi_sel = st.selectbox("KPI a pronosticar", kpis_disp,
+                               format_func=lambda k: etiquetas.get(k, k))
+
+        met = q("SELECT modelo, rmse, mape, r2, es_mejor FROM servido.pronostico_metricas "
+                "WHERE kpi=:k ORDER BY rmse", {"k": kpi_sel})
+        mejor = met[met["es_mejor"]]["modelo"].iloc[0] if len(met) and met["es_mejor"].any() else None
+
+        c = st.columns(3)
+        c[0].metric("Mejor modelo", mejor or "—")
+        if mejor:
+            fila = met[met["modelo"] == mejor].iloc[0]
+            c[1].metric("Error backtest (RMSE)", f"{fila['rmse']:,.1f}")
+            c[2].metric("R² (bondad de ajuste)", f"{fila['r2']:.3f}")
+            if fila["r2"] < 0.2:
+                st.warning("⚠️ Este KPI es una tasa/promedio con poca estructura temporal; "
+                           "el pronóstico es poco fiable (R² bajo). Limitación documentada: "
+                           "los volúmenes se pronostican bien; las tasas requieren más señal.")
+
+        # Serie mensual: histórico observado + pronóstico del mejor modelo con banda.
+        hist = q("SELECT mes, y_real AS valor FROM servido.pronosticos_mensual "
+                 "WHERE kpi=:k AND tipo='historico' ORDER BY mes", {"k": kpi_sel})
+        fc = q("SELECT mes, y_pred AS valor, lo, hi FROM servido.pronosticos_mensual "
+               "WHERE kpi=:k AND tipo='forecast' AND modelo=:m ORDER BY mes",
+               {"k": kpi_sel, "m": mejor}) if mejor else pd.DataFrame()
+
+        if len(hist):
+            hist["serie"] = "histórico"
+            capas = [alt.Chart(hist).mark_line(point=True, color="#1f77b4").encode(
+                x=alt.X("mes:T", title="Mes"), y=alt.Y("valor:Q", title=etiquetas.get(kpi_sel, kpi_sel)))]
+            if len(fc):
+                banda = alt.Chart(fc).mark_area(opacity=0.2, color="#ff7f0e").encode(
+                    x="mes:T", y="lo:Q", y2="hi:Q")
+                linea = alt.Chart(fc).mark_line(point=True, strokeDash=[5, 3], color="#ff7f0e").encode(
+                    x="mes:T", y="valor:Q")
+                capas = [banda] + capas + [linea]
+            st.altair_chart(alt.layer(*capas).properties(height=320), use_container_width=True)
+            st.caption("Línea azul = histórico observado · línea naranja punteada = pronóstico · "
+                       "banda = intervalo de confianza al 80 %.")
+
+        if len(fc):
+            st.markdown("**Proyección mensual (mejor modelo)**")
+            tabla = fc.copy()
+            tabla["mes"] = pd.to_datetime(tabla["mes"]).dt.strftime("%Y-%m")
+            tabla = tabla.rename(columns={"valor": "proyección", "lo": "límite inf.", "hi": "límite sup."})
+            st.dataframe(tabla[["mes", "proyección", "límite inf.", "límite sup."]]
+                         .style.format({"proyección": "{:,.0f}", "límite inf.": "{:,.0f}",
+                                        "límite sup.": "{:,.0f}"}), use_container_width=True, hide_index=True)
+
+        if len(met):
+            st.markdown("**Comparación de modelos (backtest)**")
+            comp = met.rename(columns={"modelo": "Modelo", "rmse": "RMSE", "mape": "MAPE %",
+                                       "r2": "R²", "es_mejor": "Mejor"})
+            st.dataframe(comp.style.format({"RMSE": "{:,.1f}", "MAPE %": "{:.1f}", "R²": "{:.3f}"}),
+                         use_container_width=True, hide_index=True)
 
 st.divider()
 st.caption("Fase 7 · UISRAEL · datos servidos desde PostgreSQL (batch + streaming). "

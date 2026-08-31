@@ -93,27 +93,6 @@ def bronze_audio_index(context: AssetExecutionContext) -> MaterializeResult:
     return MaterializeResult(metadata={"grabaciones_scope": n, "ruta": MetadataValue.path(out)})
 
 
-@asset(partitions_def=daily, group_name=BRONCE, deps=[bronze_audio_index],
-       description="Audio crudo (MP3) del día → Bronce/MinIO por SFTP SOLO LECTURA "
-                   "(auditoría, observación del tutor). Idempotente + estrangulado.")
-def bronze_audio(context: AssetExecutionContext) -> MaterializeResult:
-    from src.processing.audio_landing import land_day
-
-    day = context.partition_key
-    limit = int(os.getenv("AUDIO_LAND_LIMIT", "0"))       # 0 = todo el día
-    sleep_s = float(os.getenv("AUDIO_LAND_SLEEP", "0.05"))  # estrangulamiento
-    stats = land_day(day, sleep_s=sleep_s, limit=limit, log=context.log.info)
-    context.log.info(f"bronze_audio {day}: {stats}")
-    return MaterializeResult(metadata={
-        "grabaciones_indice": stats["total"],
-        "subidos": stats["subidos"],
-        "omitidos_idempotencia": stats["omitidos"],
-        "fallidos": stats["fallidos"],
-        "MB_subidos": stats["mb"],
-        "acceso": "SFTP SOLO LECTURA (ruta exacta)",
-    })
-
-
 # ───────────────────────────── Zona Plata ─────────────────────────────
 @asset(partitions_def=daily, group_name=PLATA, deps=[bronze_cdr, bronze_audio_index],
        description="Cruce CDR↔grabación (ext+teléfono+ventana) + muestra → Parquet + servido.llamadas.")
@@ -154,6 +133,50 @@ def silver_calls(context: AssetExecutionContext) -> MaterializeResult:
     })
 
 
+@asset(partitions_def=daily, group_name=BRONCE, deps=[silver_calls],
+       description="Audio crudo (MP3) de la muestra del día → Bronce/MinIO por SFTP SOLO "
+                   "LECTURA. Solo llamadas con billsec>=AUDIO_MIN_SECS (0=toda la muestra; "
+                   "600=solo largas). Aterriza únicamente lo que se transcribirá. Idempotente.")
+def bronze_audio(context: AssetExecutionContext) -> MaterializeResult:
+    import pandas as pd
+    from sqlalchemy import text as sqltext
+
+    from src.processing.audio_landing import land_paths
+    from src.processing.config import pg_engine
+
+    day = context.partition_key
+    min_secs = int(os.getenv("AUDIO_MIN_SECS", "0"))       # 0 = toda la muestra; 600 = solo largas
+    sleep_s = float(os.getenv("AUDIO_LAND_SLEEP", "0.05"))  # estrangulamiento
+    limit = int(os.getenv("AUDIO_LAND_LIMIT", "0"))        # 0 = sin tope (para pruebas)
+
+    eng = pg_engine()
+    df = pd.read_sql(
+        sqltext("SELECT audio_path, billsec FROM servido.llamadas "
+                "WHERE fecha = :f AND en_muestra AND COALESCE(billsec,0) >= :m"),
+        eng, params={"f": day, "m": min_secs},
+    )
+    eng.dispose()
+    paths = [p for p in df["audio_path"].astype(str).tolist() if p and p != "None"]
+    if not paths:
+        context.log.info(
+            f"bronze_audio {day}: 0 grabaciones (>= {min_secs}s en muestra). "
+            f"¿Se corrió la pasada operativa (bronze_cdr, silver_calls) de este día?")
+        return MaterializeResult(metadata={"grabaciones": 0, "min_secs": min_secs})
+    context.log.info(f"bronze_audio {day}: {len(paths)} grabaciones (>= {min_secs}s); "
+                     f"copiando (SOLO LECTURA)...")
+    stats = land_paths(paths, day, sleep_s=sleep_s, limit=limit, log=context.log.info)
+    context.log.info(f"bronze_audio {day}: {stats}")
+    return MaterializeResult(metadata={
+        "grabaciones": stats["total"],
+        "subidos": stats["subidos"],
+        "omitidos_idempotencia": stats["omitidos"],
+        "fallidos": stats["fallidos"],
+        "MB_subidos": stats["mb"],
+        "min_secs": min_secs,
+        "acceso": "SFTP SOLO LECTURA (ruta exacta)",
+    })
+
+
 # ─────────────── Zonas Plata/Oro — esqueleto (Fases 3, 4, 6) ───────────────
 @asset(partitions_def=daily, group_name=PLATA, deps=[silver_calls, bronze_audio],
        description="Transcripciones anonimizadas: encola asr.jobs → worker Whisper → asr.results. "
@@ -188,8 +211,14 @@ def silver_transcriptions(context: AssetExecutionContext) -> MaterializeResult:
         eng, params={"f": day},
     )
     eng.dispose()
+    # Solo-largas (backfill de ventas/riesgo): transcribir únicamente >= ASR_MIN_SECS.
+    # 0 = todas las de la muestra. 600 = solo largas (población relevante para Gemini).
+    min_secs = int(os.getenv("ASR_MIN_SECS", "0"))
+    if min_secs:
+        df = df[df["billsec"].fillna(0).astype(int) >= min_secs]
     if not len(df):
-        context.log.warning(f"silver_transcriptions {day}: sin llamadas en muestra.")
+        context.log.warning(f"silver_transcriptions {day}: sin llamadas en muestra "
+                            f"(min_secs={min_secs}).")
         return MaterializeResult(metadata={"transcritas": 0, "nota": "sin muestra"})
     df["base"] = df["audio_path"].map(os.path.basename)
 
@@ -328,6 +357,7 @@ def gold_evaluations(context: AssetExecutionContext) -> MaterializeResult:
                 "sentimiento_asesor": ev.sentimiento_asesor,
                 "sentimiento_cliente": ",".join(ev.sentimiento_cliente_trayectoria),
                 "confianza_llm": ev.confianza_llm, "modelo": ev.modelo,
+                "impersona_banco": ev.impersona_banco,
             })
         except Exception as e:  # noqa: BLE001
             fallidas += 1
@@ -437,11 +467,29 @@ def gold_diarizations(context: AssetExecutionContext) -> MaterializeResult:
     })
 
 
-@asset(partitions_def=daily, group_name=ORO, deps=[gold_evaluations],
-       description="KPIs y anomalías por agente/periodo + intentos por contacto. Fase 6.")
+@asset(group_name=ORO,
+       description="KPIs diarios (operativos del CDR + ventas/calidad rubrica_v2) → servido.kpis. "
+                   "Base del pronóstico (Fase 6). NO particionado: reconstruye toda la serie "
+                   "desde servido.llamadas + servido.evaluaciones.")
 def gold_kpis(context: AssetExecutionContext) -> MaterializeResult:
-    context.log.info("gold_kpis: esqueleto — agregados, anomalías y KPI de intentos (Fase 6).")
-    return MaterializeResult(metadata={"estado": "esqueleto", "fase": 6})
+    from src.processing.serving import build_kpis
+
+    stats = build_kpis()
+    context.log.info(f"gold_kpis: {stats}")
+    return MaterializeResult(metadata=stats)
+
+
+@asset(group_name=ORO, deps=[gold_kpis],
+       description="Pronóstico de KPIs operativos (Fase 7) → servido.pronosticos(_mensual) + "
+                   "pronostico_metricas. Compara baseline/Holt-Winters/SARIMA/Prophet con "
+                   "backtest (MAE/RMSE/MAPE/R²), proyecta con banda. Depende de gold_kpis.")
+def gold_pronosticos(context: AssetExecutionContext) -> MaterializeResult:
+    from src.analysis.forecast import run
+
+    res = run()
+    mejores = {k: v.get("mejor") for k, v in res.items() if isinstance(v, dict)}
+    context.log.info(f"gold_pronosticos: mejores modelos por KPI = {mejores}")
+    return MaterializeResult(metadata={"kpis": len(res), "mejores": str(mejores)})
 
 
 defs = Definitions(
@@ -454,5 +502,6 @@ defs = Definitions(
         gold_evaluations,
         gold_diarizations,
         gold_kpis,
+        gold_pronosticos,
     ]
 )

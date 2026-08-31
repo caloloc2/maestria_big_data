@@ -18,6 +18,11 @@ RUN mkdir -p $DAGSTER_HOME /opt/dagster/app
 COPY infra/requirements.dagster.txt /tmp/req.txt
 RUN pip install --no-cache-dir -r /tmp/req.txt
 
+# Prophet 1.1.6 trae el modelo Stan YA compilado (prophet_model.bin), pero el cmdstan
+# empaquetado no incluye el 'makefile' que cmdstanpy exige para validar la ruta. Como el
+# modelo no se recompila, basta crear el archivo vacío para pasar la validación.
+RUN find /usr/local/lib -type d -path '*prophet/stan_model/cmdstan-*' -exec touch {}/makefile \;
+
 # JARs de conectividad S3A (Hadoop AWS) para que Spark lea/escriba en MinIO (s3a://).
 # Versiones atadas a PySpark 3.5.3 (cliente Hadoop 3.3.4). Se hornean en la imagen para
 # no depender de internet en runtime (despliegue on-premise reproducible).

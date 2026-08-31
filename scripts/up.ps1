@@ -9,6 +9,7 @@
 # ─────────────────────────────────────────────────────────────
 param(
     [switch]$Build,
+    [switch]$NoStream,   # no arranca el streaming_runner (modo backfill)
     [ValidateSet("GPU", "CPU")]
     [string]$Device = "GPU"
 )
@@ -23,6 +24,13 @@ if ($Build) {
     docker compose -f $compose up -d
 }
 if ($LASTEXITCODE -ne 0) { Write-Error "docker compose up falló (código $LASTEXITCODE)" }
+
+if ($NoStream) {
+    # Modo backfill: el streaming compite por el único worker → se detiene.
+    # (unless-stopped + stop manual = NO se reactiva solo al reiniciar Docker.)
+    Write-Host "==> -NoStream: deteniendo streaming_runner (modo backfill)..." -ForegroundColor Yellow
+    docker stop uisrael_streaming_runner 2>$null | Out-Null
+}
 
 Write-Host "==> Arrancando el Whisper worker (host, GPU)..." -ForegroundColor Cyan
 & (Join-Path $PSScriptRoot "worker-up.ps1") -Device $Device

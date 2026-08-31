@@ -81,6 +81,8 @@ DDL_EV = [
     """,
     "CREATE INDEX IF NOT EXISTS ix_ev_fecha ON servido.evaluaciones (fecha)",
     "CREATE INDEX IF NOT EXISTS ix_ev_agente ON servido.evaluaciones (agente)",
+    # Gemini con contexto: señal fiable de B17 (hacerse pasar por el banco).
+    "ALTER TABLE servido.evaluaciones ADD COLUMN IF NOT EXISTS impersona_banco integer DEFAULT 0",
 ]
 
 
@@ -245,3 +247,70 @@ def replace_evaluaciones(pdf: pd.DataFrame, fecha: str) -> None:
     if len(pdf):
         pdf.to_sql("evaluaciones", eng, schema="servido", if_exists="append", index=False)
     eng.dispose()
+
+
+# ───────────────────────── KPIs (Fase 6) ─────────────────────────
+DDL_KPI = [
+    "CREATE SCHEMA IF NOT EXISTS servido",
+    """
+    CREATE TABLE IF NOT EXISTS servido.kpis (
+        fecha            date PRIMARY KEY,
+        n_llamadas       integer,
+        n_contestadas    integer,
+        contactabilidad  real,
+        dur_media        real,
+        n_largas         integer,
+        n_evaluadas      integer,
+        n_ventas         integer,
+        n_ventas_validas integer,
+        n_ventas_riesgo  integer,
+        calidad_media    real,
+        tasa_conversion  real
+    )
+    """,
+]
+
+_KPI_SQL = """
+INSERT INTO servido.kpis (fecha,n_llamadas,n_contestadas,contactabilidad,dur_media,n_largas,
+  n_evaluadas,n_ventas,n_ventas_validas,n_ventas_riesgo,calidad_media,tasa_conversion)
+WITH ll AS (
+  SELECT fecha,
+    count(*) n_llamadas,
+    count(*) FILTER (WHERE disposition='ANSWERED') n_contestadas,
+    round(avg(billsec)::numeric,1) dur_media,
+    count(*) FILTER (WHERE en_muestra AND billsec>=600) n_largas
+  FROM servido.llamadas GROUP BY fecha
+),
+ev AS (
+  SELECT fecha,
+    count(*) n_evaluadas,
+    count(*) FILTER (WHERE es_venta=1) n_ventas,
+    count(*) FILTER (WHERE venta_valida_v2=1) n_ventas_validas,
+    count(*) FILTER (WHERE venta_con_riesgo=1) n_ventas_riesgo,
+    round(avg(calidad_score_v2)::numeric,1) calidad_media
+  FROM servido.evaluaciones GROUP BY fecha
+)
+SELECT ll.fecha, ll.n_llamadas, ll.n_contestadas,
+  CASE WHEN ll.n_llamadas>0 THEN round(100.0*ll.n_contestadas/ll.n_llamadas,1) ELSE 0 END,
+  ll.dur_media, ll.n_largas,
+  COALESCE(ev.n_evaluadas,0), COALESCE(ev.n_ventas,0), COALESCE(ev.n_ventas_validas,0),
+  COALESCE(ev.n_ventas_riesgo,0), ev.calidad_media,
+  CASE WHEN ll.n_contestadas>0 THEN round(100.0*COALESCE(ev.n_ventas,0)/ll.n_contestadas,2) ELSE 0 END
+FROM ll LEFT JOIN ev ON ev.fecha=ll.fecha
+"""
+
+
+def build_kpis() -> dict:
+    """Reconstruye servido.kpis (serie diaria: operativos + ventas/calidad v2)."""
+    eng = pg_engine()
+    with eng.begin() as con:
+        for stmt in DDL_KPI:
+            con.execute(text(stmt))
+        con.execute(text("DELETE FROM servido.kpis"))
+        con.execute(text(_KPI_SQL))
+        r = list(con.execute(text(
+            "SELECT count(*), COALESCE(sum(n_ventas),0), COALESCE(sum(n_ventas_validas),0), "
+            "COALESCE(sum(n_ventas_riesgo),0) FROM servido.kpis")))[0]
+    eng.dispose()
+    return {"dias": int(r[0]), "ventas_total": int(r[1]),
+            "ventas_validas_total": int(r[2]), "ventas_riesgo_total": int(r[3])}

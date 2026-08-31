@@ -16,3 +16,6 @@ confluent-kafka==2.5.3   # encolar asr.jobs / leer asr.results (Fase 3)
 google-generativeai==0.8.3  # análisis de calidad con Gemini (Fase 4)
 s3fs==2024.9.0           # escritura de Parquet a MinIO desde pandas (bronze_cdr)
 paramiko==3.5.0          # SFTP SOLO LECTURA del audio crudo → Bronce (bronze_audio, streaming)
+statsmodels==0.15.0      # pronóstico de KPIs (Fase 7): SARIMA / Holt-Winters (comparación)
+scikit-learn==1.9.0      # métricas de pronóstico (MAE/RMSE/R²) y modelos ML (Fase 7/8)
+prophet==1.1.6           # pronóstico principal (Fase 7): tendencia + estacionalidad anual/semanal + changepoints

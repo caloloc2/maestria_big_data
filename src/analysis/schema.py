@@ -25,6 +25,9 @@ class Evaluacion(BaseModel):
     fuente_etiqueta: Literal["llm_propuesta", "humano_confirmada", "humano_corregida"] = "llm_propuesta"
     confianza_llm: float = Field(ge=0.0, le=1.0, default=0.0)
     modelo: str = ""
+    # Gemini con contexto: 1 si el asesor da a entender que ES/llama de parte del
+    # banco/Diners (impersonación, aunque no diga la frase exacta). Señal fiable de B17.
+    impersona_banco: int = Field(ge=0, le=1, default=0)
 
 
 # Criterios CRÍTICOS del Grupo A (fallarlos ⇒ infracción crítica).

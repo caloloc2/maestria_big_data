@@ -237,6 +237,30 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Tablero GERENCIAL (Streamlit) — Fase 7b. Vista para gerencia SIN métricas técnicas:
+  # proyección por mes/bimestre/trimestre en lenguaje llano. Puerto 8502, aparte del técnico.
+  dashboard_gerencial:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.streamlit
+    image: uisrael/streamlit:dev
+    container_name: uisrael_dashboard_gerencial
+    command: streamlit run src/dashboard/gerencial.py --server.address=0.0.0.0 --server.port=8502 --server.headless=true
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: dagster
+      POSTGRES_USER: dagster
+      POSTGRES_PASSWORD: dagster
+    ports:
+      - "8502:8502"
+    volumes:
+      - ../src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   pgdata: {}
   kafkadata: {}

@@ -44,6 +44,7 @@ warnings.filterwarnings("ignore")
 KPIS = {
     "n_llamadas": "sum",
     "n_contestadas": "sum",
+    "n_largas": "sum",          # llamadas largas (>600s) = base para estimar ventas
     "contactabilidad": "mean",
     "dur_media": "mean",
 }

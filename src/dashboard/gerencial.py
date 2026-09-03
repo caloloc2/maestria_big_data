@@ -62,20 +62,44 @@ with c0:
 n = HOR[horizonte]
 
 
-def mejor_modelo(kpi: str) -> str | None:
+# Modelo con el que gerencia ve la proyección: Prophet, el modelo elegido del proyecto
+# (extrapola tendencia + estacionalidad con banda de confianza y es robusto a huecos). Se
+# usa en lugar del "mejor por R²" del backtest porque ese criterio puede premiar a un modelo
+# (p. ej. Holt-Winters) que ajusta bien la ventana de prueba pero EXTRAPOLA de forma
+# implausible fuera de ella —colapsando el volumen de llamadas o superando el 100 % de
+# contactabilidad—. El panel técnico (8501) conserva la comparación de todos los modelos como
+# evidencia (Fase 8); aquí gerencia recibe una sola proyección coherente.
+MODELO_GERENCIAL = "prophet"
+
+# Indicadores acotados por definición (porcentajes): la proyección se recorta a [0, 100].
+KPIS_TASA = {"contactabilidad"}
+
+
+def modelo_tablero(kpi: str) -> str | None:
+    """Modelo a mostrar en gerencia: Prophet si tiene proyección para el KPI; si no, el mejor."""
+    r = q("SELECT 1 FROM servido.pronosticos_mensual "
+          "WHERE kpi=:k AND tipo='forecast' AND modelo=:m LIMIT 1",
+          {"k": kpi, "m": MODELO_GERENCIAL})
+    if len(r):
+        return MODELO_GERENCIAL
     r = q("SELECT modelo FROM servido.pronostico_metricas WHERE kpi=:k AND es_mejor LIMIT 1",
           {"k": kpi})
     return r.iloc[0]["modelo"] if len(r) else None
 
 
 def serie_mensual(kpi: str):
-    """Devuelve (historico, forecast) mensual del mejor modelo, sin el mes parcial de empalme."""
+    """Devuelve (historico, forecast) mensual del modelo gerencial, sin el mes parcial de empalme.
+    Los indicadores de tipo tasa (%) se recortan a [0, 100] por definición."""
     hist = q("SELECT mes, y_real val FROM servido.pronosticos_mensual "
              "WHERE kpi=:k AND tipo='historico' ORDER BY mes", {"k": kpi})
-    m = mejor_modelo(kpi)
+    m = modelo_tablero(kpi)
     fc = q("SELECT mes, y_pred val, lo, hi FROM servido.pronosticos_mensual "
            "WHERE kpi=:k AND tipo='forecast' AND modelo=:m ORDER BY mes",
            {"k": kpi, "m": m}) if m else pd.DataFrame()
+    # Los indicadores porcentuales no pueden salir de [0, 100] aunque el modelo lo proyecte.
+    if kpi in KPIS_TASA and len(fc):
+        for c in ("val", "lo", "hi"):
+            fc[c] = fc[c].clip(lower=0, upper=100)
     # El mes que aparece en ambos (empalme) es parcial → se excluye de los dos lados.
     if len(hist) and len(fc):
         empalme = set(hist["mes"]) & set(fc["mes"])

@@ -96,23 +96,31 @@ with tabs[0]:
         FROM servido.llamadas WHERE {W}""", par)
     tr = q(f"SELECT count(*) n FROM servido.transcripciones WHERE {W}", par) \
         if tabla_existe("transcripciones") else pd.DataFrame({"n": [0]})
+    # Métricas de la rúbrica calibrada v2 (calidad_score_v2 / venta_valida_v2 /
+    # infraccion_critica_v2): la v1 marcaba TODAS las llamadas como críticas por los huecos
+    # sistémicos A03/A07 (permiso de grabación / descargo) → "Ventas válidas" salía 0 y las
+    # críticas = total. La v2 solo anula la venta ante suplantación del banco (B17), por lo que
+    # estos indicadores sí discriminan el desempeño.
     ev = q(f"""SELECT count(*) n,
-                      avg(calidad_score)::numeric(10,1) calidad,
-                      count(*) FILTER (WHERE venta_valida=1) ventas,
-                      count(*) FILTER (WHERE infraccion_critica) criticas
+                      avg(calidad_score_v2)::numeric(10,1) calidad,
+                      count(*) FILTER (WHERE venta_valida_v2=1) ventas,
+                      count(*) FILTER (WHERE venta_con_riesgo=1) riesgo,
+                      count(*) FILTER (WHERE infraccion_critica_v2) criticas
                FROM servido.evaluaciones WHERE {W}""", par) \
-        if tabla_existe("evaluaciones") else pd.DataFrame({"n": [0], "calidad": [None], "ventas": [0], "criticas": [0]})
+        if tabla_existe("evaluaciones") else pd.DataFrame({"n": [0], "calidad": [None], "ventas": [0], "riesgo": [0], "criticas": [0]})
 
     c = st.columns(4)
     c[0].metric("Llamadas", f"{int(k.iloc[0]['llamadas']):,}")
     c[1].metric("Contactadas (answered)", f"{int(k.iloc[0]['answered']):,}")
     c[2].metric("Transcritas", f"{int(tr.iloc[0]['n']):,}")
     c[3].metric("Evaluadas", f"{int(ev.iloc[0]['n']):,}")
-    c = st.columns(4)
+    c = st.columns(5)
     c[0].metric("Agentes activos", int(k.iloc[0]["agentes"]))
-    c[1].metric("Calidad media", f"{ev.iloc[0]['calidad'] or 0}")
+    c[1].metric("Calidad media (v2)", f"{ev.iloc[0]['calidad'] or 0}")
     c[2].metric("Ventas válidas", int(ev.iloc[0]["ventas"] or 0))
-    c[3].metric("Infracciones críticas", int(ev.iloc[0]["criticas"] or 0),
+    c[3].metric("Ventas con riesgo", int(ev.iloc[0]["riesgo"] or 0),
+                delta_color="inverse")
+    c[4].metric("Infracciones críticas", int(ev.iloc[0]["criticas"] or 0),
                 delta_color="inverse")
 
     serie = q(f"""SELECT fecha, count(*) llamadas,
@@ -159,10 +167,11 @@ with tabs[2]:
         por = q(f"""
             SELECT agente,
                    count(*) evaluadas,
-                   avg(calidad_score)::numeric(10,1) calidad_media,
-                   count(*) FILTER (WHERE venta_valida=1) ventas_validas,
-                   count(*) FILTER (WHERE infraccion_critica) criticas,
-                   round(100.0*count(*) FILTER (WHERE infraccion_critica)/count(*),1) pct_criticas
+                   avg(calidad_score_v2)::numeric(10,1) calidad_media,
+                   count(*) FILTER (WHERE venta_valida_v2=1) ventas_validas,
+                   count(*) FILTER (WHERE venta_con_riesgo=1) ventas_riesgo,
+                   count(*) FILTER (WHERE infraccion_critica_v2) criticas,
+                   round(100.0*count(*) FILTER (WHERE infraccion_critica_v2)/count(*),1) pct_criticas
             FROM servido.evaluaciones WHERE {W}
             GROUP BY agente ORDER BY criticas DESC, calidad_media ASC""", par)
         if len(por):

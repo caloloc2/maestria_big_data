@@ -128,6 +128,18 @@ extrapolación, no solo el ajuste en la ventana de prueba.
    que la elección automática no premie modelos que ajustan la ventana de prueba
    pero extrapolan de forma incoherente.
 
+8. **Validación cuantitativa independiente del evaluador (precisión, recall y
+   F1).** La validación actual del evaluador automático es cualitativa: se apoya
+   en la calibración de la rúbrica con el área de Auditoría y en la revisión a
+   oído de un bloque de llamadas. La medición formal de precisión, recall y F1
+   contra un gold set queda como trabajo futuro, dado que, para ser
+   representativa, requiere un etiquetado independiente por un segundo auditor y
+   una estimación de la concordancia entre evaluadores (por ejemplo, kappa de
+   Cohen); un gold set etiquetado por el mismo auditor que calibró la rúbrica
+   mide consistencia interna, no acierto independiente. Se recomienda además
+   ampliar el tamaño de la muestra de referencia más allá del piloto de 60
+   llamadas.
+
 ## 3. Resultados adicionales con el histórico ampliado
 
 Durante el procesamiento por bloques del histórico de ventas se completaron los

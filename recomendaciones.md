@@ -1,0 +1,25 @@
+# Recomendaciones
+
+> Borrador para la sección **RECOMENDACIONES** de `presentacion_3.docx`.
+> Redactado en lenguaje natural, sin tecnicismos innecesarios y sin usar guiones para separar frases.
+> Pégalo manualmente si el tutor autoriza la sección. Puedes quitar o combinar párrafos según el espacio que tengas.
+
+---
+
+A partir de la experiencia obtenida durante el desarrollo y las primeras pruebas de la solución, se plantean las siguientes recomendaciones. Algunas buscan aprovechar mejor la información que ya existe en la empresa y otras apuntan a que el proyecto siga creciendo una vez que entre en operación.
+
+**Integrar las ventas registradas en el CRM.** Hoy el sistema deduce si una llamada terminó en venta a partir del propio audio, con apoyo del modelo de lenguaje. Se recomienda cruzar esa detección con las ventas que ya quedan registradas en el CRM de la empresa. De esta manera se puede confirmar con certeza cuáles llamadas cerraron realmente una venta, separar las ventas efectivas de los simples intentos y medir la conversión real del equipo. Además, contar con esa información verdadera permitiría calibrar y volver más confiable el detector automático de ventas y de ventas con riesgo, que es una de las piezas centrales del proyecto.
+
+**Construir un historial de auditorías reales para mejorar la calificación.** La forma en que el sistema califica hoy se ajustó con el criterio de un solo auditor. Se recomienda ir formando un historial de llamadas revisadas y etiquetadas por más de una persona del área de auditoría, de modo que exista una referencia sólida contra la cual comparar la evaluación automática. Con ese historial se podría medir de manera formal qué tan bien acierta el sistema, usando indicadores de precisión y de concordancia entre auditores, y afinar poco a poco los pesos de la rúbrica. Así la calificación deja de ser un valor fijo y se convierte en un modelo que aprende y mejora con el tiempo.
+
+**Revisar y afinar la rúbrica de calidad junto con Auditoría.** Durante el trabajo se detectó que algunos criterios de la rúbrica resultan ambiguos o incluso se contradicen entre sí. Se recomienda que el área de auditoría revise y reestructure su rúbrica para que las métricas se ajusten mejor al proceso y al modelo. En la misma línea, conviene seguir trasladando la detección de ciertas prácticas desde reglas rígidas hacia la comprensión por contexto del modelo de lenguaje, tal como se hizo con la insinuación de estar llamando de parte del banco, que es la principal fuente de reclamos.
+
+**Completar el procesamiento de todo el histórico.** Por un tema de tiempo, el sistema transcribió y evaluó principalmente las llamadas largas y una parte de la historia disponible. Se recomienda procesar el histórico completo, e idealmente incluir también las llamadas más cortas, para que el pronóstico de ventas y de ventas con riesgo se apoye en una serie continua y más larga. Con más años de información el modelo podría reconocer patrones de temporada y entregar proyecciones más finas.
+
+**Mejorar la transcripción con mejor hardware y adaptación al negocio.** La calidad de la transcripción está limitada por el audio original, que se guarda en baja calidad, más que por el modelo. Se recomienda probar un modelo de reconocimiento de voz superior sobre una tarjeta gráfica dedicada y agregar una lista de nombres propios, marcas y lugares frecuentes en el negocio, con el fin de reducir errores en nombres y evitar que se oculte información que no es sensible. También conviene activar la separación de voces entre asesor y cliente cuando se disponga del equipo adecuado, ya que enriquece el análisis de cada conversación.
+
+**Reforzar la privacidad en el uso de servicios en la nube.** El proyecto envía a la nube únicamente texto ya anonimizado, lo cual protege la información del cliente. Aun así, se recomienda migrar el servicio de inteligencia artificial a un plan empresarial que garantice de forma explícita que los datos enviados no se utilizan para entrenar otros modelos. De este modo se mantiene la anonimización como frontera y se suma una garantía contractual adicional, lo que resulta importante por el tipo de información que maneja la empresa.
+
+**Ampliar el alcance a las llamadas entrantes y a otros canales.** El estudio se concentró en las llamadas salientes de venta. Se recomienda extender la solución a las llamadas entrantes y, más adelante, a otros canales de atención como el chat o la mensajería, para lograr una visión completa de la calidad del servicio y no solo de la venta. Esto convertiría la herramienta en un control integral de toda la relación con el cliente.
+
+**Desplegar en producción y capacitar al equipo.** Finalmente, el paso natural es llevar la solución del ambiente de desarrollo al servidor de la empresa, dejándola funcionando de manera continua, y acompañar ese despliegue con una capacitación formal a las áreas de auditoría y de gerencia. Que las personas se apropien de los tableros y los usen en su trabajo diario es lo que asegura que el proyecto genere el valor esperado y se mantenga vivo en el tiempo.
